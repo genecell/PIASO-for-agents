@@ -92,19 +92,9 @@ curl -L https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/dist/
   -o .github/copilot-instructions.md
 ```
 
-**OpenAI Codex** — two options (use either or both):
-- Instructions file: add the `AGENTS.md` pointer below to your project's `AGENTS.md` (Codex's
-  primary instructions file).
-- MCP tools: register the server with Codex (writes to `~/.codex/config.toml`):
-  ```bash
-  codex mcp add piaso -- uvx piaso-mcp
-  ```
-  or add it by hand to `~/.codex/config.toml` (or a project `.codex/config.toml`):
-  ```toml
-  [mcp_servers.piaso]
-  command = "uvx"
-  args = ["piaso-mcp"]
-  ```
+**OpenAI Codex** — add the `AGENTS.md` pointer below to your project's `AGENTS.md` (Codex's
+primary instructions file), and/or register the MCP server (see the **MCP server** section
+below — Codex is covered there).
 
 **AGENTS.md (Aider / Zed / Codex / any AGENTS.md-aware agent)** — append the hub pointer to
 your project's `AGENTS.md` (or copy [`dist/agents/AGENTS.md`](dist/agents/AGENTS.md)):
@@ -118,21 +108,127 @@ https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/dist/llms/llm
 ```
 (and `llms-full.txt` alongside it). These can also be served from `https://piaso.org/llms.txt`.
 
-**MCP server** — serves the docs + the live PIASOmarkerDB, no packages needed. The config key
-differs by client:
+## MCP server
+
+`piaso-mcp` serves the PIASO ecosystem docs **plus** the live PIASOmarkerDB — no
+Python packages required. Tools: `search_docs`, `get_api`, `compare_implementations`,
+`resolve_install`, `list_datasets`, and the live DB proxies `query_marker_db`,
+`get_markers`, `list_studies`. It is a **local stdio** server (not a hosted remote endpoint),
+so it works in Claude Code / Cursor / VS Code / Windsurf / Zed / Codex / Cline, but **not** in
+the claude.ai web app — use the Skill upload there.
+
+### Prerequisite (all clients): `uv`
+
+The server runs via `uvx`, which ships with **`uv`**. This is the one thing "no packages
+needed" doesn't cover — install it once:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh   # macOS / Linux
+# or:  pipx install uv   |   pip install --user uv   |   brew install uv   |   winget install astral-sh.uv
+```
+
+Then confirm it's reachable: `uvx --version`. **If that says "command not found"**, uv's bin
+dir isn't on your PATH — either add it, or replace `"uvx"` in the configs below with the
+**absolute path** from `which uvx` (Windows: `where uvx`). First launch downloads the package
+(~30 s); later launches are cached.
+
+The MCP **config key and file location differ per client** — pick your agent below.
+
+### Claude Code — key `mcpServers`
+
+Easiest is the CLI (no hand-editing, and it handles the PATH issue in one line):
+
+```bash
+claude mcp add piaso --scope user -- uvx piaso-mcp
+# uvx not on PATH? use its absolute path:
+claude mcp add piaso --scope user -- "$(which uvx)" piaso-mcp
+
+claude mcp get piaso        # verify → Status: ✔ Connected
+```
+
+Or edit `~/.claude.json` (user) / project `.mcp.json`:
+
 ```jsonc
-// Claude Code / Cursor / Windsurf: "mcpServers"; VS Code: "servers"; Zed: "context_servers"
 { "mcpServers": { "piaso": { "command": "uvx", "args": ["piaso-mcp"] } } }
 ```
+
+### Cursor — key `mcpServers`
+
+File: `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per project). Same shape as Claude Code:
+
+```jsonc
+{ "mcpServers": { "piaso": { "command": "uvx", "args": ["piaso-mcp"] } } }
+```
+
+Enable it under **Settings → MCP**.
+
+### Windsurf — key `mcpServers`
+
+File: `~/.codeium/windsurf/mcp_config.json` (open via **Settings → Cascade → MCP Servers → Manage → raw config**):
+
+```jsonc
+{ "mcpServers": { "piaso": { "command": "uvx", "args": ["piaso-mcp"] } } }
+```
+
+### VS Code (GitHub Copilot, Agent mode) — key `servers` (note: not `mcpServers`)
+
+Workspace file `.vscode/mcp.json`, or user `settings.json` under `"mcp"`. VS Code also wants a `type`:
+
+```jsonc
+// .vscode/mcp.json
+{ "servers": { "piaso": { "type": "stdio", "command": "uvx", "args": ["piaso-mcp"] } } }
+```
+
+Or one-shot from the terminal:
+
+```bash
+code --add-mcp '{"name":"piaso","command":"uvx","args":["piaso-mcp"]}'
+```
+
+### Zed — key `context_servers` (different shape)
+
+File: `~/.config/zed/settings.json`. Zed nests under `context_servers` and marks custom servers with `"source": "custom"`:
+
+```jsonc
+{
+  "context_servers": {
+    "piaso": { "source": "custom", "command": "uvx", "args": ["piaso-mcp"], "env": {} }
+  }
+}
+```
+
+### Codex (OpenAI Codex CLI) — TOML, table `[mcp_servers.<name>]` (not JSON!)
+
+Codex is the odd one out: its config is **TOML**, in `~/.codex/config.toml`. Add a table:
+
 ```toml
-# OpenAI Codex (~/.codex/config.toml):
 [mcp_servers.piaso]
 command = "uvx"
 args = ["piaso-mcp"]
+# uvx not on PATH? give the absolute path from `which uvx`:
+# command = "/home/you/.local/bin/uvx"
 ```
-This is a **local stdio** server (works in Claude Code, Cursor, VS Code, Windsurf, Zed, Codex).
-It is not a hosted remote endpoint, so it does not attach to the claude.ai web app — use the
-Skill upload there.
+
+Or use the CLI (handles the file for you):
+
+```bash
+codex mcp add piaso -- uvx piaso-mcp
+codex mcp list        # verify it's registered
+```
+
+### Cline / Continue (VS Code extensions) — key `mcpServers`
+
+Cline: **MCP Servers → Configure** (writes `cline_mcp_settings.json`). Continue: `~/.continue/config` (`mcpServers`). Both use the standard shape:
+
+```jsonc
+{ "mcpServers": { "piaso": { "command": "uvx", "args": ["piaso-mcp"] } } }
+```
+
+---
+
+**After configuring, restart the client** — MCP tools are loaded at startup, so a running
+session won't see the server until it's relaunched. If it doesn't connect, 99% of the time
+it's the `uv`/PATH prerequisite above.
 
 ## Repository layout
 
