@@ -16,3 +16,6 @@ This repository is part of the **PIASO single-cell omics ecosystem**. Full, cros
 - **emergene_conditions**: >=2 conditions -> runEMERGENE (needs condition_key); single condition -> runMarkG.
 
 For full API, workflows, and citations, read the hub.
+
+---
+Maintained by **[The Fishell Laboratory](https://fishelllab.hms.harvard.edu)** (Harvard Medical School / Broad Institute).

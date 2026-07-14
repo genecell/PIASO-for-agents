@@ -4,8 +4,8 @@
 coding agent — Claude Code, Cursor, Copilot, Codex, Windsurf, Cline, Aider — from one
 canonical, agent-neutral knowledge pack.**
 
-Maintained by the PIASO maintainers (Gord Fishell Lab, Harvard Medical School / Broad
-Institute). Every agent-specific format (Claude skill, Cursor rules, `AGENTS.md`,
+Maintained by **[The Fishell Laboratory](https://fishelllab.hms.harvard.edu)** (Harvard
+Medical School / Broad Institute). Every agent-specific format (Claude skill, Cursor rules, `AGENTS.md`,
 `llms.txt`, MCP server) is a **generated artifact** built from `canonical/` — never a
 hand-maintained copy. A CI drift check (`python build.py --check`) fails the build if any
 `dist/` artifact is out of sync with `canonical/`, and the code-block test suite re-runs on
@@ -246,6 +246,12 @@ tests/           # executes every canonical code block (Python + R) against PIAS
 
 Cite each component by its own paper — see [`canonical/meta.yaml`](canonical/meta.yaml).
 PIASO: Wu, S.J., Dai, M. *et al.* *Nature* (2026), DOI `10.1038/s41586-025-09996-8`.
+
+## Maintainers
+
+Developed and maintained by **[The Fishell Laboratory](https://fishelllab.hms.harvard.edu)**
+(Harvard Medical School / Broad Institute).
+Contact: Min Dai — dai@broadinstitute.org.
 
 ## License
 

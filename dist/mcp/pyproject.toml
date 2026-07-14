@@ -10,10 +10,16 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "BSD-3-Clause"
 authors = [{ name = "Min Dai", email = "dai@broadinstitute.org" }]
+maintainers = [{ name = "Min Dai", email = "dai@broadinstitute.org" }]
 dependencies = [
     "mcp>=1.2.0",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://piaso.org"
+Repository = "https://github.com/genecell/PIASO-for-agents"
+Lab = "https://fishelllab.hms.harvard.edu"
 
 [project.scripts]
 piaso-mcp = "piaso_mcp.server:main"

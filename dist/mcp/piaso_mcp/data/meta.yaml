@@ -16,9 +16,14 @@ hub:
   homepage: https://piaso.org
   source: https://github.com/genecell/PIASO-for-agents
   license: BSD-3-Clause
+  maintainer: "Min Dai <dai@broadinstitute.org>"
+  lab: "The Fishell Laboratory"
+  lab_url: https://fishelllab.hms.harvard.edu
+  affiliation: "Harvard Medical School / Broad Institute"
   maintainer_disclosure: >-
-    Authored by the PIASO maintainers. Disclose this on any third-party
-    contribution (e.g. the anthropics/knowledge-work-plugins PR).
+    Authored by the PIASO maintainers (The Fishell Laboratory, HMS / Broad).
+    Disclose this on any third-party contribution (e.g. the
+    anthropics/knowledge-work-plugins PR).
 
 # ---------------------------------------------------------------------------
 # Component version matrix. `re_exported_through_piaso` is the load-bearing column:

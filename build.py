@@ -124,7 +124,14 @@ def _agents_body(scope: str) -> str:
         + "\n\n## Cross-component decision rules\n"
         + "\n".join(f"- **{r['id']}**: {r['rule'].strip()}" for r in META["decision_rules"])
         + "\n\nFor full API, workflows, and citations, read the hub.\n"
+        + _maintainer_footer()
     )
+
+
+def _maintainer_footer() -> str:
+    h = META["hub"]
+    lab, url, aff = h.get("lab", ""), h.get("lab_url", ""), h.get("affiliation", "")
+    return f"\n---\nMaintained by **[{lab}]({url})** ({aff}).\n" if lab else ""
 
 
 def build_agents(dist: Path) -> None:
@@ -182,6 +189,7 @@ def build_llms(dist: Path) -> None:
     idx.append("\n## Optional")
     idx.append("- [gotchas](gotchas.md)")
     idx.append("- [data fixtures](data.md)")
+    idx.append(_maintainer_footer())
     (d / "llms.txt").write_text("\n".join(idx) + "\n")
     # llms-full.txt = everything concatenated
     full = [f"# {hub['name']} — full\n"]
