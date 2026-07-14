@@ -56,8 +56,13 @@ jobs:
       - uses: r-lib/actions/setup-r@v2
         with: { r-version: "4.3" }
       - name: Install SeuratObject + COSGR
+        env:
+          # remotes::install_github fetches DESCRIPTION via the GitHub API; without a token it
+          # uses the (rate-limited) bundled PAT and fails with "cannot open URL .../DESCRIPTION".
+          # The runner's built-in token authenticates the API call — no secret setup needed.
+          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           Rscript -e 'install.packages(c("SeuratObject","proxyC","data.table","remotes"), repos="https://cloud.r-project.org")'
-          Rscript -e 'remotes::install_github("genecell/COSGR")'
+          Rscript -e 'remotes::install_github("genecell/COSGR", upgrade = "never")'
       - name: Run R block parse checks + functional COSGR
         run: Rscript tests/test_r_blocks.R
