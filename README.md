@@ -69,6 +69,17 @@ claude plugin marketplace add genecell/PIASO-for-agents
 claude plugin install piaso@PIASO-for-agents
 ```
 
+**Claude.ai (web app)** — upload the generated skill as a Skill (Pro/Max/Team/Enterprise, with
+code execution enabled). Download the [`dist/claude/skills/piaso/`](dist/claude/skills/piaso)
+folder, zip it, then in claude.ai go to **Settings → Capabilities → Skills → Create skill** and
+upload the zip:
+```bash
+# from a clone of this repo:
+cd dist/claude/skills && zip -r piaso-skill.zip piaso    # -> upload piaso-skill.zip in claude.ai
+```
+The local MCP server below is stdio-only, so it does **not** work in the web app — use the Skill
+upload (or the `llms.txt` URL) on claude.ai; use MCP in Claude Code / Cursor / Codex.
+
 **Cursor** — download the rule into your project's `.cursor/rules/`:
 ```bash
 curl -L https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/dist/cursor/.cursor/rules/piaso.mdc \
@@ -81,7 +92,21 @@ curl -L https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/dist/
   -o .github/copilot-instructions.md
 ```
 
-**AGENTS.md (Codex / Aider / Zed / any AGENTS.md-aware agent)** — append the hub pointer to
+**OpenAI Codex** — two options (use either or both):
+- Instructions file: add the `AGENTS.md` pointer below to your project's `AGENTS.md` (Codex's
+  primary instructions file).
+- MCP tools: register the server with Codex (writes to `~/.codex/config.toml`):
+  ```bash
+  codex mcp add piaso -- uvx piaso-mcp
+  ```
+  or add it by hand to `~/.codex/config.toml` (or a project `.codex/config.toml`):
+  ```toml
+  [mcp_servers.piaso]
+  command = "uvx"
+  args = ["piaso-mcp"]
+  ```
+
+**AGENTS.md (Aider / Zed / Codex / any AGENTS.md-aware agent)** — append the hub pointer to
 your project's `AGENTS.md` (or copy [`dist/agents/AGENTS.md`](dist/agents/AGENTS.md)):
 > This project uses the PIASO single-cell omics ecosystem. Agent-neutral, tested docs for
 > every component (Python + R), plus the cross-component decision rules, live at
@@ -93,11 +118,21 @@ https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/dist/llms/llm
 ```
 (and `llms-full.txt` alongside it). These can also be served from `https://piaso.org/llms.txt`.
 
-**MCP server** — one-line config; serves the docs + the live PIASOmarkerDB, no packages needed:
+**MCP server** — serves the docs + the live PIASOmarkerDB, no packages needed. The config key
+differs by client:
 ```jsonc
 // Claude Code / Cursor / Windsurf: "mcpServers"; VS Code: "servers"; Zed: "context_servers"
 { "mcpServers": { "piaso": { "command": "uvx", "args": ["piaso-mcp"] } } }
 ```
+```toml
+# OpenAI Codex (~/.codex/config.toml):
+[mcp_servers.piaso]
+command = "uvx"
+args = ["piaso-mcp"]
+```
+This is a **local stdio** server (works in Claude Code, Cursor, VS Code, Windsurf, Zed, Codex).
+It is not a hosted remote endpoint, so it does not attach to the claude.ai web app — use the
+Skill upload there.
 
 ## Repository layout
 
