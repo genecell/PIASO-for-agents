@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# virtualenvs / build tooling
+.venv/
+venv/
+build/
+
+# the MCP wheel build output (build to an external --outdir instead; see mcp/README.md)
+/dist/mcp/dist/
+
+# OS
+.DS_Store

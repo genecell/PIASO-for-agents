@@ -1,0 +1,73 @@
+# Activation test set. Each prompt has an expected routing outcome.
+# `fire`: should the piaso skill activate?  `component`/`language`: correct route if it fires.
+# Deliberately includes single-component prompts with NO 'PIASO' branding, the SCALAR-vs-LARIS
+# both-directions probe, the Python-vs-R disambiguation probe, the undocumented-API probe
+# (score a gene set), and negative controls that must NOT fire.
+prompts:
+  - id: markers_scrnaseq
+    text: "Find marker genes for my clustered scRNA-seq data"
+    fire: true
+    component: [COSG, PIASO]
+    language: python
+  - id: cosg_no_branding
+    text: "Use COSG to get markers for my clusters"
+    fire: true
+    component: [COSG]
+    language: python
+    note: "single-component, no PIASO branding"
+  - id: laris_named
+    text: "Run LARIS on this dataset"
+    fire: true
+    component: [LARIS]
+  - id: emergene_named
+    text: "How do I use Emergene?"
+    fire: true
+    component: [Emergene]
+  - id: annotate_h5ad
+    text: "I have a .h5ad from mouse cortex — annotate the cell types"
+    fire: true
+    component: [PIASO, PIASOmarkerDB, COSG]
+    language: python
+  - id: score_gene_set
+    text: "Score this gene set across my cells"
+    fire: true
+    component: [PIASO]
+    note: "undocumented-API probe (piaso.tl.score); if this misses, meta.yaml is incomplete"
+  - id: lr_single_cell
+    text: "Analyze ligand-receptor interactions at single-cell level"
+    fire: true
+    component: [SCALAR, PIASO]
+    note: "SCALAR direction"
+  - id: lr_spatial_visium
+    text: "Find ligand-receptor interactions in my Visium data"
+    fire: true
+    component: [LARIS]
+    note: "LARIS (spatial) direction — must NOT pick SCALAR"
+  - id: fast_rank_genes
+    text: "What's a fast alternative to rank_genes_groups?"
+    fire: true
+    component: [COSG]
+  - id: cosg_seurat_R
+    text: "I have a Seurat object, find markers with COSG"
+    fire: true
+    component: [COSGR, COSG]
+    language: r
+    note: "must route to R / COSGR"
+  - id: cosg_h5ad_py
+    text: "Here's my .h5ad, run COSG"
+    fire: true
+    component: [COSG]
+    language: python
+    note: "must route to Python"
+  # ---- negative controls: must NOT fire ----
+  - id: neg_nfcore
+    text: "Run nf-core rnaseq on this GEO accession"
+    fire: false
+  - id: neg_qc
+    text: "Do QC on this .h5ad"
+    fire: false
+    note: "generic scanpy QC; the .h5ad token must not over-trigger"
+  - id: neg_scvi
+    text: "Batch-correct with scVI"
+    fire: false
+    note: "route to scvi-tools, not PIASO"

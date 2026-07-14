@@ -1,0 +1,184 @@
+# meta.yaml — the single source of the component version matrix, trigger vocabulary,
+# per-component citations, licenses, and cross-component decision rules.
+# Every generated target (Claude skill description, Cursor rule description, llms.txt
+# summary, MCP tool metadata) consumes this file. Hand-maintained; canonical/ prose and
+# dist/ artifacts are generated from it + the markdown in canonical/.
+#
+# Versions below are the ones the code-block test suite currently runs against; the CI
+# suite re-pins them on each component release.
+
+hub:
+  name: PIASO-for-agents
+  description: >-
+    Agent-neutral knowledge hub for the PIASO single-cell omics ecosystem
+    (Gord Fishell Lab, HMS / Broad). One canonical source generates every
+    agent format (Claude skill, Cursor rules, AGENTS.md, llms.txt, MCP).
+  homepage: https://piaso.org
+  source: https://github.com/genecell/PIASO-for-agents
+  license: BSD-3-Clause
+  maintainer_disclosure: >-
+    Authored by the PIASO maintainers. Disclose this on any third-party
+    contribution (e.g. the anthropics/knowledge-work-plugins PR).
+
+# ---------------------------------------------------------------------------
+# Component version matrix. `re_exported_through_piaso` is the load-bearing column:
+# COSG is a hard dependency of piaso-tools and is called internally, but is NOT
+# exposed under the piaso.* namespace — users still `import cosg`.
+# ---------------------------------------------------------------------------
+components:
+  - id: piaso
+    repo: https://github.com/genecell/PIASO
+    language: [python]                       # + bundled Rust extension (piaso._piaso_score)
+    pypi: piaso-tools
+    import: piaso                            # submodules: piaso.tl|tools, piaso.pp|preprocessing, piaso.pl|plotting
+    aliases: {tools: tl, preprocessing: pp, plotting: pl}   # runtime-identical objects
+    version_last_tested: "1.1.0"
+    license: BSD-3-Clause
+    install: 'pip install piaso-tools "matplotlib<3.9"'
+    depends_on: [cosg]                       # hard dep; auto-installed with piaso-tools
+    re_exported_through_piaso: n/a
+    citation_id: piaso_nature_2026
+
+  - id: cosg
+    repo: https://github.com/genecell/COSG
+    language: [python]
+    pypi: cosg
+    import: cosg                             # cosg.cosg(...)
+    version_last_tested: "1.0.4"
+    license: BSD-3-Clause
+    install: "pip install cosg"
+    re_exported_through_piaso: false         # PIASO calls cosg.cosg internally, not exposed as piaso.cosg
+    counterpart: cosgr                        # R implementation — SEE divergence rules below
+    citation_id: cosg_bib_2022
+
+  - id: cosgr
+    repo: https://github.com/genecell/COSGR
+    language: [r]
+    cran: null                               # NOT on CRAN
+    import: "library(COSG)"                  # cosg(...)
+    version_last_tested: "1.0.0"
+    license: BSD-3-Clause
+    install: 'remotes::install_github("genecell/COSGR")'
+    object_model: [Seurat, SingleCellExperiment]
+    counterpart: cosg                         # Python implementation
+    citation_id: cosg_bib_2022
+
+  - id: laris
+    repo: https://github.com/genecell/LARIS
+    language: [python]
+    pypi: laris
+    import: laris                            # laris.tl|la.tl, .pp, .pl, .datasets
+    version_last_tested: "0.9.3"
+    license: BSD-3-Clause
+    install: "pip install laris"
+    depends_on: [cosg]
+    bundled_data: CellChatDB (human 2951 / mouse 3105 LR pairs)
+    citation_id: laris_biorxiv_2025
+
+  - id: emergene
+    repo: https://github.com/genecell/Emergene
+    language: [python]
+    pypi: emergene
+    import: emergene                         # emergene.tl|eg.tl, .pp, .pl
+    version_last_tested: "1.0.2"
+    license: BSD-3-Clause
+    install: "pip install emergene"          # pins annoy<1.17.0 (BBKNN segfault guard)
+    citation_id: piaso_nature_2026           # Emergene has NO separate paper — cites Wu, Dai et al. Nature (2026)
+
+  - id: piaso-data
+    repo: https://github.com/genecell/PIASO-data
+    language: [data]
+    version_last_tested: null
+    license: "CC BY 4.0 (per README; no LICENSE file present)"
+    contents: "genome refs (hg38/mm10, in-repo) + tutorial datasets (Zenodo 10.5281/zenodo.19699639)"
+    smallest_fixtures:
+      markerdb_blocks: piaso_markerdb_allen_immune   # 117 KB CSV
+      anndata_blocks: e18_v3_nuclei                  # ~20 MB 10x h5, ~5000 cells
+
+# Repos that exist in the org but are NOT documented ecosystem members yet.
+# Re-check before each release; promote if they ship docs.
+watch_list: [ROEN, SCDC, Tahoeformer]
+
+# ---------------------------------------------------------------------------
+# Trigger vocabulary. Every component name is a FIRST-CLASS standalone trigger
+# (users say "find markers with COSG" and never mention PIASO). SCALAR is a PIASO
+# function but is a first-class trigger term in its own right.
+# ---------------------------------------------------------------------------
+triggers:
+  component_names: [PIASO, COSG, COSGR, LARIS, Emergene, SCALAR, PIASOmarkerDB]
+  task_phrasings:
+    - marker gene identification / find markers for clusters
+    - ligand-receptor analysis / cell-cell communication
+    - gene-set scoring / gene-set enrichment / score a gene set
+    - cell type annotation / label transfer / predict cell types
+    - marker-gene-guided dimensionality reduction (GDR)
+    - INFOG normalization
+    - batch integration across samples
+    - differential expression across conditions
+  file_formats: [".h5ad", "AnnData", "Seurat", ".rds", "Visium", "spatial"]
+
+# ---------------------------------------------------------------------------
+# Cross-component decision rules — the hub's reason to exist. No single repo
+# can state these. Each is tested in both directions by the activation suite.
+# ---------------------------------------------------------------------------
+decision_rules:
+  - id: lr_scalar_vs_laris
+    question: "analyze ligand-receptor interactions"
+    rule: >-
+      Spatial coordinates present (.obsm['spatial']/['X_spatial']; Visium/MERFISH/Xenium)
+      -> LARIS (runLARIS). Dissociated single-cell, no coordinates -> PIASO
+      piaso.tl.runSCALAR. SCALAR needs a user-supplied LR-pair list + specificity matrix
+      (no bundled DB); LARIS bundles CellChatDB.
+  - id: cosg_python_vs_r
+    question: "use COSG to find markers"
+    rule: >-
+      Infer language from objects in session: AnnData / .h5ad / scanpy -> Python `cosg`;
+      Seurat object / .rds / library(Seurat) -> R COSGR. Ask when ambiguous. NOTE default
+      flips: remove_lowly_expressed False(Py)/TRUE(R); n_genes 50(Py)/100(R).
+  - id: emergene_conditions
+    question: "differential expression across conditions"
+    rule: ">=2 conditions -> runEMERGENE (needs condition_key); single condition -> runMarkG."
+
+# ---------------------------------------------------------------------------
+# Per-component citations — VERBATIM from each repo README. One per component,
+# never a blanket citation. (COSG/COSGR READMEs omit the 23(2) volume/issue;
+# the canonical form below restores it — flagged for upstream README fix.)
+# ---------------------------------------------------------------------------
+citations:
+  piaso_nature_2026:
+    text: >-
+      Wu, S.J., Dai, M. et al. Pyramidal neurons proportionately alter cortical
+      interneuron subtypes. Nature (2026).
+    doi: 10.1038/s41586-025-09996-8
+    applies_to: [piaso, emergene]
+  cosg_bib_2022:
+    text: >-
+      Dai M, Pei X, Wang X-J. Accurate and fast cell marker gene identification
+      with COSG. Briefings in Bioinformatics 23(2):bbab579 (2022).
+    doi: 10.1093/bib/bbab579
+    applies_to: [cosg, cosgr]
+    note: "Both COSG READMEs omit the 23(2) volume/issue; restored here."
+  laris_biorxiv_2025:
+    text: >-
+      M. Dai, T. Török, D. Sun, et al. LARIS enables accurate and efficient ligand
+      and receptor interaction analysis in spatial transcriptomics. bioRxiv (2025).
+    doi: 10.1101/2025.11.26.690796
+    applies_to: [laris]
+    note: "Preprint — a separate publication from the Nature (2026) paper."
+
+# ---------------------------------------------------------------------------
+# Ecosystem-wide gotchas (carried into every install line).
+# ---------------------------------------------------------------------------
+gotchas:
+  - id: piaso_matplotlib_39
+    text: >-
+      PIASO 1.1.0 fails to `import` under matplotlib >= 3.9 (piaso/plotting/color.py
+      calls the removed matplotlib.cm.get_cmap at import time). Pin "matplotlib<3.9"
+      in every PIASO install line and code block until fixed upstream.
+  - id: emergene_annoy
+    text: "emergene pins annoy<1.17.0; stitchSpace warns annoy>=1.17 causes a BBKNN segfault."
+  - id: markerdb_is_remote_api
+    text: >-
+      PIASOmarkerDB is a REMOTE REST API client (https://piaso.org/piasomarkerdb/api/v1/),
+      NOT wheel-bundled data. Any MCP tool must proxy the live API or obtain a raw snapshot
+      + redistribution license from the maintainers first.

@@ -1,0 +1,20 @@
+# PIASO-for-agents
+
+> Agent-neutral knowledge hub for the PIASO single-cell omics ecosystem (Gord Fishell Lab, HMS / Broad). One canonical source generates every agent format (Claude skill, Cursor rules, AGENTS.md, llms.txt, MCP).
+
+## Components
+- [piaso](components/piaso.md): python, install `pip install piaso-tools "matplotlib<3.9"`
+- [cosg](components/cosg.md): python, install `pip install cosg`
+- [cosgr](components/cosg.md): r, install `remotes::install_github("genecell/COSGR")` (documented with cosg)
+- [laris](components/laris.md): python, install `pip install laris`
+- [emergene](components/emergene.md): python, install `pip install emergene`
+
+## Workflows
+- [Workflow — end-to-end scRNA-seq (load → clusters → markers → GDR)](workflows/end_to_end_scrnaseq.md)
+- [Workflow — ligand–receptor / cell–cell communication](workflows/ligand_receptor.md)
+- [Workflow — marker-based cell-type annotation](workflows/marker_based_annotation.md)
+- [Workflow — cell-type inference from PIASOmarkerDB](workflows/markerdb_annotation.md)
+
+## Optional
+- [gotchas](gotchas.md)
+- [data fixtures](data.md)

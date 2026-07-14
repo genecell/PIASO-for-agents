@@ -1,0 +1,9 @@
+piaso-tools
+cosg
+laris
+emergene
+matplotlib<3.9
+igraph
+leidenalg
+pytest
+pyyaml

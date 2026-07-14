@@ -1,0 +1,1361 @@
+# PIASO-for-agents — full
+
+
+<!-- ===== overview.md ===== -->
+
+# PIASO ecosystem — overview (tier-1 router)
+
+This file is the routing layer for the PIASO single-cell omics ecosystem. Read it first to
+decide **which component answers a request**, then open the matching `components/*.md` (self-
+sufficient per-tool reference) or `workflows/*.md` (a multi-step analysis task). If an agent
+can read only one file, it should be this one.
+
+## What the PIASO ecosystem is
+
+PIASO is a family of **five installable packages plus one data repository** for single-cell and
+spatial transcriptomics, from the Gord Fishell Lab (HMS / Broad). The packages are: **PIASO**
+(`piaso-tools`, Python) — the umbrella toolkit for INFOG normalization, dimensionality reduction
+(SVD, marker-gene-guided GDR), gene-set scoring, cell-type prediction, the PIASOmarkerDB client,
+and **SCALAR** single-cell ligand–receptor inference; **COSG** (`cosg`, Python) — fast marker-gene
+identification by cosine-similarity scoring; **COSGR** (`COSG`, **R**) — the R implementation of
+COSG for Seurat / SingleCellExperiment objects; **LARIS** (`laris`, Python) — ligand–receptor
+interaction analysis for **spatial** transcriptomics; and **Emergene** (`emergene`, Python) —
+individual-cell differential transcriptomics **across conditions**. The data repository
+**PIASO-data** hosts tutorial datasets (Zenodo) and genome references. The ecosystem is
+**multi-language**: everything is Python except COSGR, which brings marker identification to R
+users (Seurat/`.rds` workflows). The common substrate is an AnnData object (`.h5ad`) in Python.
+
+## Task → component routing table
+
+| The user wants to… | Route to | Where |
+|---|---|---|
+| Find marker genes for clusters (AnnData / scanpy) | **COSG** — `cosg.cosg` | `components/cosg.md` |
+| Find marker genes for clusters (Seurat / `.rds` / R) | **COSGR** — `cosg()` in R | `components/cosg.md` |
+| Score a gene set / gene-set enrichment per cell | **PIASO** — `piaso.tl.score` | `components/piaso.md` |
+| Normalize raw UMI counts (information-content) | **PIASO** — `piaso.tl.infog` | `components/piaso.md` |
+| Dimensionality reduction / SVD embedding | **PIASO** — `piaso.tl.runSVDLazy` | `components/piaso.md` |
+| Marker-gene-guided DR / batch integration | **PIASO** — `piaso.tl.runGDR` / `stitchSpace` | `components/piaso.md` |
+| Annotate cell types from a marker set | **PIASO** — `piaso.tl.predictCellTypeByMarker` | `workflows/marker_based_annotation.md` |
+| Reference-based label transfer | **PIASO** — `piaso.tl.predictCellTypeByGDR` | `components/piaso.md` |
+| Infer cell types for a gene list from a curated DB | **PIASO + PIASOmarkerDB** — `analyzeMarkers` | `workflows/markerdb_annotation.md` |
+| Ligand–receptor / cell–cell communication, **dissociated scRNA-seq** | **PIASO / SCALAR** — `piaso.tl.runSCALAR` | `workflows/ligand_receptor.md` |
+| Ligand–receptor / cell–cell communication, **spatial** | **LARIS** — `laris.tl.runLARIS` | `workflows/ligand_receptor.md` |
+| Differential expression **across ≥2 conditions** | **Emergene** — `emergene.tl.runEMERGENE` | `components/emergene.md` |
+| Marker/variable genes in **one condition** | **Emergene** — `emergene.tl.runMarkG` | `components/emergene.md` |
+| Full clustering pipeline (load → markers → GDR) | end-to-end scRNA-seq | `workflows/end_to_end_scrnaseq.md` |
+
+## Cross-component decision rules — the hub's core value
+
+No single package can state these; they exist because two tools can answer the same request. Each
+rule is symmetric — check it in **both directions**.
+
+### 1. Ligand–receptor: SCALAR (single-cell) vs LARIS (spatial)
+
+Key off **spatial coordinates**.
+- **Spatial coordinates present** — a Visium / Slide-seq / MERFISH / Xenium / Stereo-seq object,
+  coordinates in `adata.obsm['spatial']` or `adata.obsm['X_spatial']`, or the user asks for
+  spatially-specific / neighborhood interactions → **LARIS** (`laris.tl.runLARIS`). LARIS bundles
+  CellChatDB (human 2951 / mouse 3105 pairs) via `laris.datasets.lrDatabase`.
+- **No coordinates — dissociated single-cell RNA-seq** (only expression + cell-type labels) →
+  **PIASO SCALAR** (`piaso.tl.runSCALAR`). SCALAR takes a **user-supplied** LR-pair list and a
+  specificity matrix (no bundled DB).
+- Tie-breaker: coordinates in `.obsm` → LARIS; no coordinates → SCALAR. LARIS's method keys off a
+  spatial kNN graph and is meaningless without coordinates; routing a dissociated dataset to LARIS
+  (or a spatial one to SCALAR) is the failure mode to avoid.
+
+### 2. COSG: Python (`cosg`) vs R (COSGR)
+
+Key off the **object type in session**.
+- **AnnData / `.h5ad` / scanpy** context → Python `cosg.cosg(adata, groupby=...)`.
+- **Seurat object / `.rds` / `library(Seurat)`** context → R `COSG::cosg(object, ...)` (uses the
+  active `Idents()`, no `groupby` argument).
+- Same method, but **defaults diverge**: `remove_lowly_expressed` is `False` (Python) vs `TRUE`
+  (R); `n_genes_user` is `50` (Python) vs `100` (R). A default call therefore returns different
+  gene sets across languages — state this when a user compares results. Ask when the object type
+  is genuinely ambiguous; answering in the wrong language is worse than not answering.
+
+### 3. Emergene: `runEMERGENE` (≥2 conditions) vs `runMarkG` (1 condition)
+
+Key off the **number of experimental conditions**.
+- **≥2 conditions to contrast** (disease vs control, stages) → `emergene.tl.runEMERGENE` (requires
+  `condition_key`; uses BBKNN cross-condition diffusion).
+- **A single condition / just marker or spatially-variable genes** → `emergene.tl.runMarkG`.
+- `runEMERGENE` itself warns and points to `runMarkG` when it detects only one condition.
+
+## Every component installs independently
+
+Each package installs and runs on its own — a COSG-only, LARIS-only, or Emergene-only user is
+**first-class**, and each `components/*.md` is written to assume nothing else is installed.
+
+```bash
+pip install piaso-tools "matplotlib<3.9"   # PIASO (auto-installs cosg as a hard dependency)
+pip install cosg                            # COSG (Python) alone
+pip install laris                           # LARIS (pulls cosg)
+pip install emergene                        # Emergene (pins annoy<1.17.0)
+```
+```r
+remotes::install_github("genecell/COSGR")   # COSGR (R) — not on CRAN
+```
+
+One dependency reality to know: **`piaso-tools` and `laris` both hard-depend on `cosg`** and call
+`cosg.cosg(...)` internally, so installing either auto-installs COSG. COSG is **not** re-exported
+under the `piaso.*` namespace, though — you still `import cosg` (there is no `piaso.cosg`).
+`emergene` and `laris` do **not** depend on `piaso-tools`.
+
+**Mandatory pin:** PIASO 1.1.0 fails to `import` under **matplotlib ≥ 3.9** (its plotting module
+calls the removed `matplotlib.cm.get_cmap` at import time). Every PIASO install line and code block
+must pin `"matplotlib<3.9"` until fixed upstream. Convention across this hub: use the **short**
+submodule aliases (`piaso.tl` / `piaso.pp` / `piaso.pl`; `laris.tl`; `emergene.tl`), which are
+runtime-identical to the long `.tools` / `.preprocessing` / `.plotting` forms.
+
+## How PIASO composes with scanpy and scvi-tools
+
+PIASO is **AnnData-native** and designed to slot into an existing scanpy pipeline: it reads and
+writes standard `adata.X` / `.layers` / `.obsm` / `.obs` / `.uns` fields, so `sc.pp.neighbors`,
+`sc.tl.leiden`, and `sc.pl.*` interoperate directly (the end-to-end workflow chains scanpy
+clustering between PIASO steps). PIASO is **complementary to scvi-tools, never a competitor**: it
+adds fast, specificity-based marker identification via COSG, INFOG information-content
+normalization, marker-gene-guided dimensionality reduction (GDR), and single-cell ligand–receptor
+inference (SCALAR) — the last of which has **no scvi-tools equivalent**. A user running scVI for
+probabilistic integration can still use COSG for markers, `piaso.tl.score` for gene-set scoring,
+and SCALAR/LARIS for communication analysis. Choose per task, not per framework.
+
+## Citations (cite the component actually used)
+
+- **PIASO / Emergene** — Wu, S.J., Dai, M. et al. *Pyramidal neurons proportionately alter cortical
+  interneuron subtypes.* Nature (2026). DOI 10.1038/s41586-025-09996-8.
+- **COSG / COSGR** — Dai M, Pei X, Wang X-J. *Accurate and fast cell marker gene identification with
+  COSG.* Briefings in Bioinformatics 23(2):bbab579 (2022). DOI 10.1093/bib/bbab579.
+- **LARIS** — M. Dai, T. Török, D. Sun, et al. *LARIS enables accurate and efficient ligand and
+  receptor interaction analysis in spatial transcriptomics.* bioRxiv (2025). DOI
+  10.1101/2025.11.26.690796 *(preprint — a separate publication from the Nature (2026) paper)*.
+
+All five packages are BSD-3-Clause. PIASO-data tutorial datasets are redistributed under CC BY 4.0
+with attribution to original sources (see `data.md`).
+
+
+<!-- ===== components/cosg.md ===== -->
+
+# COSG — component reference (self-sufficient)
+
+COSG is a fast, specific marker-gene identification method: it scores each gene
+for each cluster by **cosine similarity** between the gene's expression vector and
+a one-hot cluster indicator, then applies a second-stage `mu` penalty that
+down-weights genes also expressed in other clusters (higher `mu` → higher
+specificity). It is a faster, more specific alternative to `sc.tl.rank_genes_groups`.
+
+The **same method ships in two languages**: Python (`cosg`, working on AnnData)
+and R (`COSG`, aka the COSGR repo, working on Seurat). The algorithm is identical
+(cosine similarity + the same `mu` second-stage formula), but the two
+implementations have **materially different defaults and data contracts** — see the
+divergence table below. This file assumes nothing about PIASO being installed;
+COSG is a standalone package.
+
+## Install
+
+```bash
+# Python
+pip install cosg
+```
+```r
+# R (GitHub only — not on CRAN; needs proxyC, data.table, SeuratObject)
+remotes::install_github("genecell/COSGR")
+```
+
+## Import / entry point
+
+- Python: `import cosg` → `cosg.cosg(...)` (no submodule aliases).
+- R: `library(COSG)` → `cosg(...)`.
+
+## What COSG computes (both languages)
+
+1. Build a one-hot cluster indicator matrix (cluster × cell).
+2. Compute **cosine similarity** between each gene's expression vector and each
+   cluster indicator column → a (gene × cluster) score. A gene expressed in
+   exactly one cluster's cells scores ≈ 1.
+3. Second-stage penalized re-scoring (the COSG `mu` penalty):
+   - `mu == 1`: `score = cosine_sim**2 / row_sum(cosine_sim**2) * cosine_sim`
+   - else: `score = cosine_sim**2 / ((1-mu)*cosine_sim**2 + mu*row_sum) * cosine_sim`
+   Larger `mu` → stronger penalty for genes also expressed elsewhere.
+4. Optional `remove_lowly_expressed`: sets score to −1 for genes expressed in too
+   few cells of the target group.
+5. Select the top `n_genes_user` genes per group.
+
+Both implementations expect **log-normalized** expression values.
+
+## Python block (verified)
+
+COSG expects **log-normalized** values in `.X` (or a named layer) and reads cluster
+labels from `adata.obs[groupby]`. A self-sufficient, scanpy-only setup (no PIASO required):
+
+```python
+import scanpy as sc
+import cosg
+adata = sc.read_10x_h5("your_10x.h5")         # any 10x .h5 or .h5ad with raw counts
+adata.var_names_make_unique()
+sc.pp.filter_cells(adata, min_genes=200)
+sc.pp.filter_genes(adata, min_cells=3)
+sc.pp.normalize_total(adata, target_sum=1e4)  # standard log-normalization
+sc.pp.log1p(adata)
+sc.pp.pca(adata, n_comps=50)
+sc.pp.neighbors(adata)
+sc.tl.leiden(adata, key_added="Leiden", flavor="igraph", n_iterations=2, directed=False)
+
+# COSG on the log-normalized values now in .X
+cosg.cosg(adata, groupby="Leiden", key_added="cosg", n_genes_user=30, mu=1.0)
+# writes adata.uns['cosg'] = {'names': recarray, 'scores': recarray}, one field per cluster
+```
+
+> Already normalized with PIASO's INFOG? Set `adata.X = adata.layers["infog"]` before calling
+> COSG instead of the `normalize_total` / `log1p` step. PIASO is optional — COSG needs only
+> `cosg` (which pulls in `scanpy`).
+
+Read the top markers per cluster back out of the structured arrays:
+
+```python
+names = adata.uns["cosg"]["names"]
+marker_set = {cl: [names[cl][i] for i in range(len(names))] for cl in names.dtype.names}
+```
+
+## R block (verified)
+
+R COSG uses the active `Idents()` (there is **no `groupby` argument**), returns a
+plain `list(names, scores)`, and does **not** mutate the Seurat object.
+
+```r
+library(SeuratObject); library(COSG)
+# obj: a Seurat object with a normalized 'data' layer and cell-type Idents()
+# COSG (R) uses Idents() (NO groupby arg), returns list(names, scores), does NOT mutate obj
+res <- cosg(obj, groups = 'all', assay = 'RNA', slot = 'data', mu = 1, n_genes_user = 100)
+res$names$A   # top markers for identity 'A'
+```
+
+## Python ↔ R divergence table
+
+Same method, two languages, **different defaults and contracts**. A default call in
+each language returns *different gene sets* (because both `n_genes_user` and
+`remove_lowly_expressed` defaults flip).
+
+| Aspect | Python `cosg.cosg` | R `cosg` (COSGR) | Consequence |
+|---|---|---|---|
+| Data object | `AnnData` (cells × genes) | `Seurat` (genes × cells) | different mental model / orientation |
+| Cluster labels | explicit `groupby=` arg, reads `adata.obs[groupby]` (default `'CellTypes'`) | **no `groupby`** — uses active `Idents()` | R user must `SetIdent` first |
+| Expression source | `layer` → `raw.X` (if `use_raw`) → `adata.X` | `assay`/`slot` (default `assay='RNA'`, `slot='data'`); `layer` (Seurat v5) takes precedence | R-only `assay`/`slot` params |
+| `mu` (penalty) | `1` | `1` | **same** |
+| `remove_lowly_expressed` | **`False`** | **`TRUE`** | **default flips → different gene sets** |
+| `expressed_pct` | `0.1` | `0.1` | same |
+| Lowly-expressed floor | `max(n_cells*expressed_pct, expressed_min_num_cells_in_target_group=3)` | `n_cells*expressed_pct` only (no floor) | Python-only absolute floor |
+| `n_genes_user` | **`50`** | **`100`** | **default flips → different # markers** |
+| Output | writes `adata.uns[key_added or 'cosg']` (structured `names`/`scores`/`params`), returns `None` (or copy if `copy=True`) | returns `list(names=df, scores=df)`; object untouched | different result plumbing |
+| Python-only features | `batch_key` per-batch averaging, `calculate_logfoldchanges`, `reference`, `use_raw`, `copy`, `return_by_group`, `key_added`; plotting suite `plotMarkerDotplot`/`plotMarkerDendrogram`/`plotMarkerStream`; helpers `indexByGene`/`iqrLogNormalize` | absent — R exports only `cosg` | R users lack batch mode + plots |
+| Version | 1.0.4 | 1.0.0 | R lags |
+
+## Python-vs-R disambiguation rule
+
+Infer the language from the objects in the session:
+
+- An `.h5ad` / `AnnData` / `scanpy` context → **Python `cosg`**.
+- A `Seurat` object / `.rds` / `library(Seurat)` context → **R `COSG` (COSGR)**.
+- Ask when genuinely ambiguous. Answering in the wrong language is worse than not
+  firing.
+
+## Citation
+
+Same paper for both implementations:
+
+> Dai M, Pei X, Wang X-J. Accurate and fast cell marker gene identification with
+> COSG. *Briefings in Bioinformatics* 23(2):bbab579 (2022).
+> DOI: 10.1093/bib/bbab579
+
+(Both repo READMEs omit the "23(2)" volume/issue; it is restored here.)
+
+
+<!-- ===== components/emergene.md ===== -->
+
+# Emergene — component reference (self-sufficient)
+
+Emergene performs **individual-cell differential transcriptomics across conditions**
+(e.g. disease vs control, developmental stages): given multiple conditions it
+identifies which individual cells and genes change most between them, using graph
+diffusion + cosine similarity + cross-condition background correction. It works on
+scRNA-seq and spatial data. This file assumes nothing about PIASO being installed;
+Emergene is a standalone package (it does not depend on `piaso-tools`).
+
+## Install
+
+```bash
+pip install emergene     # pins annoy<1.17.0 (BBKNN segfault guard)
+```
+
+The `annoy<1.17.0` pin is a hard requirement: annoy ≥ 1.17.0 causes BBKNN segfaults,
+and `runEMERGENE` raises an ImportError with fix instructions if it detects a newer
+annoy.
+
+## Import / public surface
+
+`import emergene` (or `import emergene as eg`). Short submodule aliases:
+`emergene.tl` = `emergene.tools`, `emergene.pp`, `emergene.pl`.
+
+- `eg.tl`: `runEMERGENE`, `runMarkG`, `score`, `identifyGeneModule`
+- `eg.pp`: `infog`, `convertTopGeneDictToDF`
+
+## What `runEMERGENE` computes
+
+`runEMERGENE(adata, condition_key='Sample', use_rep='X_pca', n_top_EG_genes=500, ...)`
+builds cross-dataset connectivity with **BBKNN** (batching on the condition). Per
+condition it computes a target specificity (cosine similarity of expression vs a
+within-condition diffused version), a shuffled-graph random background, and a
+cross-condition background (diffusion from the *other* conditions); the final
+Emergene score is `GSP − mu*random_GSP − beta*condition_GSP`. It selects the top
+`n_top_EG_genes` per condition and also writes per-cell local fold changes.
+
+Required input state:
+
+- A low-dim embedding in **`adata.obsm[use_rep]`** (default `'X_pca'`).
+- Condition labels in **`adata.obs[condition_key]`** (default `'Sample'`) with ≥2
+  conditions (it warns and suggests `runMarkG` if only one is found).
+- Expression in `adata.X` or `adata.layers[layer]` (log-normalized or INFOG
+  recommended).
+
+Side effect: `runEMERGENE` always writes `adata.layers['localFC']`, even with
+`inplace=False`.
+
+## Verified block (verbatim)
+
+```python
+import emergene, scanpy as sc
+sc.pp.pca(adata, n_comps=30)
+adata.obs["condition"] = pd.Categorical(adata.obs["condition"].astype(str))  # >=2 conditions
+out = emergene.tl.runEMERGENE(adata, condition_key="condition", use_rep="X_pca", n_top_EG_genes=100)
+# returns (dict, DataFrame). Single-condition marker analysis -> emergene.tl.runMarkG instead.
+```
+
+## Decision rule — runEMERGENE vs runMarkG
+
+Both live in Emergene:
+
+- **≥2 conditions** to contrast → **`runEMERGENE`** (needs `condition_key`; uses
+  BBKNN cross-condition diffusion).
+- **Single condition** (just want marker / spatially-variable genes, no condition
+  comparison, no BBKNN) → **`runMarkG`**.
+
+## Citation
+
+Emergene has **no paper of its own** — cite Wu, Dai *et al.*, *Nature* (2026):
+
+> Wu, S.J., Dai, M. et al. Pyramidal neurons proportionately alter cortical
+> interneuron subtypes. *Nature* (2026). DOI: 10.1038/s41586-025-09996-8
+
+
+<!-- ===== components/laris.md ===== -->
+
+# LARIS — component reference (self-sufficient)
+
+LARIS (**L**igand **A**nd **R**eceptor **I**nteraction in **S**patial
+transcriptomics) infers spatially-specific ligand–receptor interactions and
+sender→receiver cell-type communication for **spatial** data (Visium, MERFISH,
+Xenium, Slide-seq, Stereo-seq, etc.). It keys off a spatial kNN graph and is
+meaningless without spatial coordinates. This file assumes nothing about PIASO
+being installed; LARIS is a standalone package (it does pull in `cosg` as a
+dependency, used internally for cell-type specificity).
+
+## Install
+
+```bash
+pip install laris        # also pulls cosg (used internally for cell-type specificity)
+```
+
+## Import / entry points
+
+`import laris` (or `import laris as la`). Short submodule aliases:
+`laris.tl` = `laris.tools`, `laris.pp`, `laris.pl`, and `laris.datasets`.
+
+Core: `laris.tl.prepareLRInteraction`, `laris.tl.runLARIS`.
+Bundled LR database: `laris.datasets.lrDatabase`.
+
+## What it computes
+
+- **`prepareLRInteraction(adata, lr_df, number_nearest_neighbors=10,
+  use_rep_spatial='X_spatial')`** — builds a spatial kNN graph over the coordinates,
+  diffuses expression across it, and for each LR pair takes the element-wise product
+  of the diffused ligand × diffused receptor. Returns a **new AnnData** (cells ×
+  LR-pairs) with `.var_names = "ligand::receptor"` and spatial coords carried over.
+  Requires spatial coordinates in **`adata.obsm['X_spatial']`** (LARIS's default key,
+  NOT scanpy's `'spatial'`); `lr_df` must have `ligand`/`receptor` columns whose gene
+  names exist in `adata.var_names`.
+- **`runLARIS(lr_adata, adata=..., groupby='CellTypes', ...)`** — Step 1 scores each
+  LR pair's **spatial specificity** (cosine of the LR score vs its spatially-diffused
+  version, minus a shuffled-graph null). Step 2 (`by_celltype=True`, default) uses
+  COSG cell-type specificity of ligand/receptor genes plus spatial neighborhood
+  cell-type co-localization to produce per sender→receiver interaction scores with
+  permutation p-values (BH-FDR). With `by_celltype=True` (default), `adata` is
+  **required** and must carry `.obs[groupby]` cell-type labels.
+
+## Bundled LR database (CellChatDB)
+
+`laris.datasets.lrDatabase(species=...)` loads a bundled, curated **CellChatDB**:
+**human = 2951** LR pairs, **mouse = 3105** LR pairs. The returned DataFrame has
+`ligand`/`receptor` columns (plus pathway/annotation metadata) and feeds directly
+into `prepareLRInteraction`. Pick the species that matches your `adata.var_names`.
+
+## Verified block (verbatim, with both gotchas inline)
+
+Requires spatial coordinates in `adata.obsm['X_spatial']`.
+
+```python
+import laris
+lrdb = laris.datasets.lrDatabase(species="mouse")            # bundled CellChatDB (3105 mouse pairs)
+# GOTCHA 1: filter LR-DB to pairs whose ligand AND receptor are both present in the data
+present = set(adata.var_names)
+lrdb_f = lrdb[lrdb["ligand"].isin(present) & lrdb["receptor"].isin(present)].copy()
+# GOTCHA 2: the groupby column must be a categorical dtype
+adata.obs["CellTypes"] = pd.Categorical(adata.obs["Leiden"].astype(str))
+lr_adata = laris.tl.prepareLRInteraction(adata, lr_df=lrdb_f, number_nearest_neighbors=10,
+                                         use_rep_spatial="X_spatial")
+res = laris.tl.runLARIS(lr_adata, adata=adata, groupby="CellTypes",
+                        n_permutations=100, n_top_lr=500, calculate_pvalues=True)
+# returns DataFrame (or tuple); cols: ligand, receptor, score, Rank
+```
+
+## Decision rule — LARIS vs SCALAR
+
+Both answer "which ligand–receptor interactions / cell–cell communications are
+happening?" Pick by whether the data is spatial:
+
+- **Spatial coordinates present** (Visium/MERFISH/Xenium; `.obsm['X_spatial']` /
+  `.obsm['spatial']`) → **LARIS** (`laris.tl.runLARIS`).
+- **Dissociated single-cell, no coordinates** → **SCALAR** (`piaso.tl.runSCALAR`;
+  see `components/piaso.md`). SCALAR needs a user-supplied LR-pair list + specificity
+  matrix (no bundled DB), whereas LARIS bundles CellChatDB.
+
+## Citation
+
+LARIS is a **preprint** (bioRxiv, 2025) — a separate publication from the *Nature* (2026) paper.
+
+> M. Dai, T. Török, D. Sun, et al. LARIS enables accurate and efficient ligand and
+> receptor interaction analysis in spatial transcriptomics. *bioRxiv* (2025).
+> DOI: 10.1101/2025.11.26.690796
+
+
+<!-- ===== components/piaso.md ===== -->
+
+# PIASO — component reference
+
+PIASO is a Python single-cell omics toolkit (Gord Fishell Lab, HMS / Broad). It bundles
+INFOG normalization, SVD and marker-gene-guided dimensionality reduction (GDR), gene-set
+enrichment scoring (Rust-accelerated), marker-based cell-type prediction, marker-guided
+batch integration, single-cell ligand–receptor inference (SCALAR), and a client for the
+remote PIASOmarkerDB marker database. This file is self-sufficient: it assumes nothing is
+already installed or imported.
+
+## Install
+
+```bash
+pip install piaso-tools "matplotlib<3.9"
+```
+
+The `matplotlib<3.9` pin is **mandatory**. PIASO 1.1.0 imports `piaso.plotting.color` at
+package import time, and that module calls the `matplotlib.cm.get_cmap(...)` API that was
+**removed in matplotlib 3.9**. Under matplotlib ≥ 3.9, `import piaso` fails outright.
+PIASO's own `pyproject.toml` only requires `matplotlib>=3.5.2` (no upper cap), so the cap
+is effectively undeclared — pin it yourself in every install line until fixed upstream.
+
+The PyPI distribution is named `piaso-tools`; the import name is `piaso`. Last tested
+against version 1.1.0.
+
+## Import convention
+
+Every public symbol lives under a submodule — there is **no** top-level `piaso.X`
+re-export. Use the short aliases consistently:
+
+```python
+import piaso
+piaso.tl   # tools          (also available as piaso.tools)
+piaso.pp   # preprocessing  (also available as piaso.preprocessing)
+piaso.pl   # plotting       (also available as piaso.plotting)
+```
+
+The short and long forms are the **same runtime objects** (`piaso.tools is piaso.tl`
+returns `True`), so `piaso.tl.runGDR` and `piaso.tools.runGDR` are identical. This file
+uses the short forms throughout.
+
+## Dependency: COSG
+
+`piaso-tools` **hard-depends on `cosg`** (auto-installed with it). PIASO calls
+`cosg.cosg(...)` internally inside GDR and stitchSpace, so those functions fail if COSG is
+missing — but COSG is **not re-exported** under the `piaso.*` namespace. There is no
+`piaso.cosg`; to call COSG directly you still `import cosg`. See `components/cosg.md`.
+
+## Citation
+
+> Wu, S.J., Dai, M. et al. Pyramidal neurons proportionately alter cortical interneuron
+> subtypes. Nature (2026). DOI: 10.1038/s41586-025-09996-8
+
+---
+
+## Shared setup for the examples
+
+The code blocks below all build on a loaded, filtered AnnData with raw UMI counts kept in a
+`counts` layer:
+
+```python
+import scanpy as sc
+adata = sc.read_10x_h5("e18_v3_nuclei.h5")   # any 10x h5; ~5k cells
+adata.var_names_make_unique()
+sc.pp.filter_cells(adata, min_genes=200)
+sc.pp.filter_genes(adata, min_cells=3)
+adata.layers["counts"] = adata.X.copy()      # keep raw UMIs
+```
+
+---
+
+## INFOG normalization — `piaso.tl.infog`
+
+**What it computes:** an information-content-based normalization of **raw UMI counts** (not a
+scoring or DR method). It depth-normalizes counts to the median library size, scales by an
+information factor, takes an elementwise square root, optionally trims extreme values, then
+selects the top-`n_top_genes` highly variable genes by variance of the normalized matrix.
+
+**Reads:** raw UMI counts from `adata.X` or `adata.layers[layer]` (negatives are rejected).
+**Writes:** normalized matrix to `adata.layers[key_added]` (default `infog`) — or to
+`adata.X` when `inplace=True`; plus `adata.var['<key_added>_var']` and
+`adata.var['highly_variable']` (bool).
+
+INFOG must be given **raw counts**. Its output layer name defaults to `infog`, which is also
+the default input layer of `piaso.tl.score` (below).
+
+```python
+import piaso
+piaso.tl.infog(adata, layer=None, n_top_genes=2000, key_added="infog")
+# writes adata.layers['infog'] (normalized) + adata.var['highly_variable']
+```
+
+---
+
+## SVD embedding — `piaso.tl.runSVDLazy` / `piaso.tl.runSVD`
+
+**What they compute:** a low-dimensional cell embedding via sklearn `TruncatedSVD`
+(randomized). `runSVD` is the core call (assumes an `highly_variable` column already
+exists). `runSVDLazy` is the workhorse wrapper: it does HVG selection + SVD in one call, and
+when `layer='infog'` it runs INFOG normalization first (from a raw-counts layer) and does
+SVD on that.
+
+**`runSVDLazy` reads:** `adata.X` / `adata.layers[layer]`; for infog mode, raw counts from
+`adata.layers[infog_layer]`. **Writes:** `adata.obsm[key_added]` (default `X_svd`, shape
+`n_obs × n_components`); in infog mode also `adata.layers['infog']`,
+`adata.var['infog_var']`, `adata.var['highly_variable']`.
+
+Note the default `random_state` differs between the two: `runSVDLazy` uses 1927, `runSVD`
+uses 10. `runSVDLazy` is what GDR, `leiden_local`, and the parallel wrappers use internally.
+
+```python
+piaso.tl.runSVDLazy(adata, layer="infog", infog_layer="counts",
+                    n_components=50, n_top_genes=2000, key_added="X_svd", random_state=1927)
+# writes adata.obsm['X_svd'] (n_obs x 50)
+```
+
+The embedding then feeds a standard neighbors + Leiden clustering step (scanpy; needs
+`igraph` + `leidenalg`):
+
+```python
+sc.pp.neighbors(adata, use_rep="X_svd", n_neighbors=15)
+sc.tl.leiden(adata, resolution=1.0, key_added="Leiden", flavor="igraph",
+             n_iterations=2, directed=False)
+```
+
+---
+
+## Marker-gene-guided DR (GDR) — `piaso.tl.runGDR`
+
+**What it computes:** GDR is **marker Gene-guided Dimensionality Reduction**, not a generic
+matrix factorization. It (1) takes cluster labels (`groupby`, or de-novo clustering);
+(2) runs **COSG** to get the top-`n_gene` marker genes per cluster; (3) scores every cell
+against each cluster's marker set (scanpy `score_genes` by default, or PIASO `score` when
+`scoring_method='piaso'`); (4) double L2-normalizes the resulting cell × cluster score
+matrix. **That marker-score matrix is the embedding.**
+
+**Key consequence:** the embedding width `X_gdr` is the **number of clusters**, not
+`n_svd_dims`. With a `batch_key`, markers are found per batch and every cell is scored
+against all batches' marker sets, then horizontally stacked → a batch-integrated embedding.
+
+**Reads:** `adata.X` / `adata.layers[layer]` (log/normalized), `adata.obs[groupby]` (and
+`[batch_key]`), optional `score_layer` / `infog_layer`. Requires `cosg` installed.
+**Writes:** `adata.obsm[key_added or 'X_gdr']` (`n_obs × total_n_clusters`) and
+`adata.uns['gdr']`. Its default `scoring_method` resolves to `'scanpy'` (note
+`runGDRParallel` instead defaults to `'piaso'`).
+
+The GDR marker step needs COSG-computed markers on normalized values. Run COSG first
+(COSG expects normalized/log values in `.X` or a layer):
+
+```python
+import cosg
+adata.X = adata.layers["infog"]          # COSG expects normalized/log values in .X (or a layer)
+cosg.cosg(adata, groupby="Leiden", key_added="cosg", n_genes_user=30, mu=1.0)
+# writes adata.uns['cosg'] = {'names': recarray, 'scores': recarray}, one field per cluster
+```
+
+```python
+piaso.tl.runGDR(adata, groupby="Leiden", n_gene=30, mu=1.0, layer="infog",
+                score_layer="infog", scoring_method="scanpy", key_added="X_gdr")
+# writes adata.obsm['X_gdr'] (n_obs x n_clusters)
+```
+
+The output `X_gdr` is used as `use_rep` for neighbors/UMAP/Leiden and by
+`predictCellTypeByMarker` / `predictCellTypeByGDR`.
+
+---
+
+## Gene-set enrichment scoring — `piaso.tl.score`
+
+**Source-only / UNDOCUMENTED** — this function is not on the PIASO website (a genuine
+selling point to surface). It is **Rust-accelerated**: the multi-gene-set path lazily calls
+the bundled Rust extension `piaso._piaso_score` (`score_complete` / `fused_matmul_reduce`,
+which release the GIL), with a pure-Python fallback when the extension is absent.
+
+**What it computes:** gene-set enrichment scoring with expression-matched control-gene
+background subtraction — PIASO's own optimized algorithm and implementation. For each gene
+set it builds control sets by KNN in (mean, variance) space, computes the weighted query
+score minus the mean control score, plus empirical/Monte-Carlo p-values and BH-FDR. Behavior
+depends on the input type:
+
+- **Single set** (`list[str]`): writes to `adata`, returns `None`.
+- **Multiple sets** (`dict` / `DataFrame` / `list[list]`): returns
+  `(score_matrix, gene_set_names, pval_matrix)` and uses the Rust backend.
+
+**Reads:** `adata.layers[layer]` (default `'infog'`) or `adata.X`; expects INFOG-normalized
+values by default. **Writes (single-set only):** `adata.obs[key_added or 'INFOG_score']`
+plus `adata.uns[key_added or 'INFOG_score']` (a DataFrame of score / query / ctrl / pvals).
+Genes not in `var_names` are silently dropped; the default `layer='infog'` errors if that
+layer is absent.
+
+```python
+genes = [g for g in ["Gad1","Gad2","Slc17a7"] if g in adata.var_names]
+piaso.tl.score(adata, gene_list=genes, layer="infog", key_added="myscore")
+# writes adata.obs['myscore'] + adata.uns['myscore'] (score/query/ctrl/pvals)
+```
+
+---
+
+## Cell-type prediction — `piaso.tl.predictCellTypeByMarker` / `piaso.tl.predictCellTypeByGDR`
+
+Two complementary annotation routes.
+
+### `predictCellTypeByMarker` — marker-set based
+
+**What it computes:** scores each cell against every cell type's marker set (via the parallel
+scorer), predicts the label as the argmax score, then optionally smooths predictions over a
+kNN graph in `use_rep`. Input marker sets can come from COSG output or from PIASOmarkerDB.
+
+**Reads:** `adata.X` / `adata.layers[score_layer]` (default `infog`), the `marker_gene_set`
+(list/dict/DataFrame), and `adata.obsm[use_rep]` (default `X_gdr`) for smoothing — both
+must exist. **Writes:** `adata.obs[key_added]` (final label), `adata.obsm[key_added+'_score']`
+(full score matrix), plus confidence and `_smoothed` / `_raw` variants.
+
+```python
+names = adata.uns["cosg"]["names"]
+marker_set = {cl: [names[cl][i] for i in range(len(names))] for cl in names.dtype.names}
+piaso.tl.predictCellTypeByMarker(adata, marker_gene_set=marker_set, score_layer="infog",
+                                 use_rep="X_gdr", key_added="pred", smooth_prediction=True,
+                                 return_confidence=True)
+# writes adata.obs['pred'] (+ pred_raw/pred_smoothed/pred_score/pred_*_confidence) and adata.obsm['pred_score']
+```
+
+### `predictCellTypeByGDR` — reference-based label transfer
+
+**What it computes:** concatenates a reference and query AnnData, runs GDR on the combined
+object, applies Harmony integration on `X_gdr`, then trains an RBF SVM on the reference cells
+and predicts query labels. **Reads:** `adata.layers[layer]` / `adata_ref.layers[layer_reference]`
+(overwrites `.X`), `adata_ref.obs[reference_groupby]`, `adata.obs[query_groupby]`.
+**Writes:** `adata.obs[key_added or 'CellTypes_gdr']`. Requires Harmony
+(`scanpy.external`) and overwrites `.X` with the chosen layer.
+
+> No verified code block exists for `predictCellTypeByGDR` — signature/behavior above is
+> from source, not from an executed run.
+
+---
+
+## Local sub-clustering — `piaso.tl.leiden_local`
+
+**What it computes:** sub-clusters existing groups **locally**. For each selected group (or
+all groups jointly), it subsets those cells, recomputes DR (`X_pca` via runSVDLazy, or a GDR
+/ harmony variant), rebuilds neighbors, and runs Leiden, relabelling as `{group}-{local}`.
+
+**Reads:** `adata.obs[groupby]`, `adata.X` (and `batch_key` for harmony variants).
+**Writes:** `adata.obs[key_added]` (default `Leiden_local`, categorical). `dr_method` is
+restricted to a fixed set (raises otherwise); harmony variants require a `batch_key`.
+
+```python
+piaso.tl.leiden_local(adata, groupby="Leiden", key_added="Leiden_local",
+                      resolution=0.25, dr_method="X_pca")
+# writes adata.obs['Leiden_local'] (categorical, '{group}-{local}' labels)
+```
+
+> No verified code block exists for `leiden_local` — the snippet above follows the source
+> signature but was not part of the executed test set.
+
+---
+
+## Marker-guided batch integration — `piaso.tl.stitchSpace`
+
+**IMPORTANT: `stitchSpace` is NOT spatial.** Despite the name, it reads no coordinates. It is
+a **marker-gene-guided batch correction of an embedding** ("Space" = embedding space).
+
+**What it computes:** Stage 1 builds a BBKNN graph across batches on `use_rep`,
+Leiden-clusters within each batch, runs COSG per batch for markers, computes pairwise Jaccard
+marker overlap between inter-batch clusters, and prunes BBKNN edges between incompatible
+clusters. Stage 2 computes each cell's pruned-neighbor centroid and applies a single
+correction step to the embedding.
+
+**Reads:** `adata.obsm[use_rep]` (rejected if it contains NaN/Inf), `adata.obs[batch_key]`,
+`adata.X` / `layers[filter_cosg_layer]` for COSG. **Writes:** `adata.obsm[key_added]`
+(corrected embedding, same dim as `use_rep`), plus `adata.uns[...]` marker/param entries and
+pruned-graph `adata.obsp[...]`. Requires `bbknn` and `cosg`.
+
+> No verified code block exists for `stitchSpace`. It also carries the annoy segfault gotcha
+> (see `gotchas.md`): `bbknn` with `annoy >= 1.17` can segfault — pin `annoy==1.16.3`.
+
+---
+
+## Spatial coordinate rotation — `piaso.pp.rotateSpatialCoordinates`
+
+**The genuinely spatial helper in PIASO.** **What it computes:** a 2D rotation of spatial
+coordinates about their centroid (extra dimensions pass through unchanged).
+
+**Reads:** `adata.obsm[spatial_key]` (default `X_spatial`; KeyError if absent, ValueError if
+< 2D). **Writes:** rotated coordinates back to that key (and to `backup_spatial_key` if
+given); `inplace=False` returns a copy. Spatial transcriptomics only.
+
+```python
+piaso.pp.rotateSpatialCoordinates(adata, angle_degrees=90, spatial_key="X_spatial",
+                                  clockwise=False, inplace=True)
+# rotates adata.obsm['X_spatial'] in place
+```
+
+> No verified code block exists for `rotateSpatialCoordinates` — the snippet follows the
+> source signature and needs a spatial fixture to test.
+
+---
+
+# SCALAR — single-cell ligand–receptor (`piaso.tl.runSCALAR`)
+
+**SCALAR is a PIASO function, not a separate package.** It is `piaso.tl.runSCALAR`, shipped
+inside `piaso-tools`. Do not look for a `scalar` PyPI package.
+
+**What it computes:** cell-type-resolved ligand–receptor interaction inference for
+**dissociated single-cell** (non-spatial) data. The interaction score is
+`(ligand specificity in the sender cell type) × (receptor specificity in the receiver cell
+type)`, read from a user-supplied specificity matrix. Significance comes from a
+gene-expression-matched permutation null (control ligand/receptor genes sampled from a
+per-gene KNN in mean/variance space), giving an empirical p-value and BH-FDR per
+sender–receiver pair.
+
+**User must supply the reference data — there is no bundled DB:**
+- `specificity_matrix`: a genes × cell-types DataFrame. The tested recipe is a z-scored
+  per-cluster mean (see the block below). COSG scores can seed it too, but `cosg.cosg` stores
+  only the top-N genes per cluster in `adata.uns['cosg']`, so you'd have to assemble a full
+  genes × cell-types matrix first — the z-scored mean is the simpler, all-genes option.
+- `lr_pairs`: a DataFrame with `ligand` / `receptor` columns (optional pathway annotation
+  column); genes should be present in `adata`. No bundled list, but if `laris` is installed you
+  can reuse its CellChatDB: `laris.datasets.lrDatabase(species="mouse")[["ligand","receptor"]]`.
+
+**Reads:** `adata.var_names`, `adata.X` / `adata.layers[layer]` (for the background
+mean/variance KNN), and `specificity_matrix.index`. **Writes:** nothing to `adata` — it
+**returns a DataFrame** with columns `ligand, receptor, sender, receiver, interaction_score,
+p_value, p_value_fdr, nlog10_p_value_fdr`.
+
+```python
+import numpy as np, pandas as pd
+# specificity_matrix: genes x cell types (z-scored per-cluster mean; tested recipe)
+ct = adata.obs["Leiden"].astype(str)
+cell_types = sorted(ct.unique(), key=int)
+X = adata.layers["infog"]
+means = np.vstack([np.asarray(X[(ct==c).values].mean(0)).ravel() for c in cell_types]).T
+spec = pd.DataFrame(means, index=adata.var_names, columns=cell_types)
+spec = spec.sub(spec.mean(1), axis=0).div(spec.std(1).replace(0,1), axis=0)
+# lr_pairs: DataFrame with ligand/receptor columns, genes present in adata
+lr = pd.DataFrame([{"ligand":l,"receptor":r} for l,r in
+                   [("Nrxn1","Nlgn1"),("Nrxn3","Nlgn1"),("Efna5","Epha4")]
+                   if l in adata.var_names and r in adata.var_names])
+res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr,
+                         n_permutations=200, random_seed=42)
+# DataFrame: ligand, receptor, sender, receiver, interaction_score, p_value, p_value_fdr, nlog10_p_value_fdr
+```
+
+**Companion plotters** (consume the `runSCALAR` DataFrame + specificity matrix):
+`piaso.pl.plotLigandReceptorInteraction` (barplot + specificity heatmap) and
+`piaso.pl.plotLigandReceptorLollipop` (lollipop of top interactions).
+
+**Decision rule — SCALAR vs LARIS.** For ligand–receptor / cell–cell communication:
+- **Spatial data** (coordinates in `.obsm['spatial']` / `['X_spatial']`; Visium / MERFISH /
+  Xenium) → use **LARIS** (`laris.tl.runLARIS`; bundles CellChatDB). See
+  `components/laris.md`.
+- **Dissociated single-cell** (no coordinates) → use **SCALAR** (`piaso.tl.runSCALAR`;
+  user supplies the LR-pair list + specificity matrix).
+
+---
+
+# PIASOmarkerDB — remote marker database client
+
+**PIASOmarkerDB is a remote REST API client, not bundled data.** The functions issue HTTP
+queries to `https://piaso.org/piasomarkerdb/api/v1/` and therefore **require internet
+access** (and the `requests` package; results cache under `~/.piaso/markers`). It is
+**Python-only**.
+
+Functions (all under `piaso.tl`):
+- `queryPIASOmarkerDB(...)` — query the DB by gene / cell_type / study / species / tissue /
+  condition / score range; also `list_studies` / `list_cell_types` / `list_genes`
+  meta-queries. Returns a DataFrame (or a list for the `list_*` calls).
+- `getMarkers(...)` — a thin `@wraps` **alias** of `queryPIASOmarkerDB` (identical behavior).
+- `analyzeMarkers(genes, ...)` — infers likely cell types for a gene list / COSG DataFrame /
+  dict by querying the DB per gene and ranking contexts by matched-gene count and average
+  specificity.
+- `PIASOmarkerDB(...)` — the underlying REST client class that the module-level functions
+  wrap.
+
+**Returned column schema:** `cell_type, condition, gene, species, specificity_score,
+study_publication, tissue`.
+
+```python
+import piaso
+studies = piaso.tl.queryPIASOmarkerDB(list_studies=True)      # list[str], 36 studies
+df = piaso.tl.queryPIASOmarkerDB(cell_type="Microglia", limit=5)
+# columns: cell_type, condition, gene, species, specificity_score, study_publication, tissue
+df2 = piaso.tl.getMarkers(gene="AIF1", limit=3)               # alias of queryPIASOmarkerDB
+res = piaso.tl.analyzeMarkers(["AIF1","P2RY12","CX3CR1","CSF1R"], n_top_genes=50)  # infer cell type
+```
+
+---
+
+## Preprocessing utilities — `piaso.pp`
+
+Besides `rotateSpatialCoordinates` (above), the preprocessing module provides small
+data-wrangling helpers:
+- `piaso.pp.table(values, rank=False, ascending=False, as_dataframe=False)` — R-style
+  `table()`: value counts of a categorical, optionally sorted, returned as a dict or DataFrame.
+- `piaso.pp.getCrossCategories(df, col1, col2, delimiter='@')` — build an ordered pandas
+  Categorical from the cross-combination of two columns (e.g. `batch@celltype`), respecting
+  existing category orders.
+
+## Plotting — `piaso.pl`
+
+PIASO ships plotting helpers (matplotlib/seaborn/scanpy-based — remember the `matplotlib<3.9`
+pin from the install section):
+- `plot_embeddings_split(adata, color, splitby, basis='X_umap', ...)` — faceted embedding
+  scatter, one panel per `splitby` category, with shared axes and legend.
+- `plot_features_violin(adata, feature_list, groupby=None, ...)` — stacked per-feature violins.
+- `plotConfusionMatrix(data, groupby_query, groupby_reference, normalize='query', ...)` — an
+  SVD-reordered confusion-matrix heatmap between two label columns.
+- `createCustomCmapFromHex(hex_colors)` — build a colormap from hex colors; the
+  `piaso.pl.color` submodule also exposes ready-made discrete/continuous palettes.
+- `plotLigandReceptorInteraction` / `plotLigandReceptorLollipop` — consume the `runSCALAR`
+  output (see the SCALAR section above).
+
+> The `piaso.pp` / `piaso.pl` entries are documented from source; the plotting calls are not
+> part of the executed test suite (they need a display and figure fixtures).
+
+## See also
+
+- `components/cosg.md` — the marker-gene method PIASO depends on (you still `import cosg`).
+- `components/laris.md` — spatial ligand–receptor analysis (the LR counterpart to SCALAR).
+- `gotchas.md` — ecosystem-wide traps (the `matplotlib<3.9` import bug, the annoy segfault,
+  raw-vs-normalized layer requirements, PIASOmarkerDB needing internet).
+
+
+<!-- ===== workflows/end_to_end_scrnaseq.md ===== -->
+
+# Workflow — end-to-end scRNA-seq (load → clusters → markers → GDR)
+
+A full single-cell RNA-seq pipeline built from PIASO + COSG + scanpy: load a 10x dataset, QC-filter,
+INFOG-normalize, reduce dimensions, cluster, find markers, and build a marker-gene-guided embedding.
+Every block below is executed and passing on the `e18_v3_nuclei` fixture (see `data.md`).
+
+## Install
+
+```bash
+pip install piaso-tools cosg igraph leidenalg "matplotlib<3.9"
+```
+
+`piaso-tools` pulls scanpy and (as a hard dependency) `cosg`; `igraph` + `leidenalg` are needed by
+the scanpy Leiden step. The `"matplotlib<3.9"` pin is mandatory — PIASO 1.1.0 fails to import
+without it.
+
+## State that flows between steps
+
+Each step reads specific AnnData fields and writes new ones; the next step depends on them. Track:
+`adata.layers["counts"]` (raw UMIs), `adata.layers["infog"]` (normalized), `adata.obsm["X_svd"]`
+(SVD embedding), `adata.obs["Leiden"]` (cluster labels), `adata.uns["cosg"]` (markers),
+`adata.obsm["X_gdr"]` (marker-guided embedding).
+
+## Step 1 — Load + QC
+
+Runs first. Reads the 10x `.h5`; writes filtered `adata` and preserves raw counts in a layer for
+INFOG (which needs raw UMIs).
+
+```python
+import scanpy as sc
+adata = sc.read_10x_h5("e18_v3_nuclei.h5")   # PIASO-data: e18_v3_nuclei (10x h5, ~5k cells)
+adata.var_names_make_unique()
+sc.pp.filter_cells(adata, min_genes=200)
+sc.pp.filter_genes(adata, min_cells=3)
+adata.layers["counts"] = adata.X.copy()      # keep raw UMIs
+```
+**Out:** filtered `adata`; `adata.layers["counts"]` = raw UMIs.
+
+## Step 2 — INFOG normalization
+
+Runs after QC (needs the raw counts from Step 1). Writes a normalized layer and selects HVGs.
+
+```python
+import piaso
+piaso.tl.infog(adata, layer=None, n_top_genes=2000, key_added="infog")
+# writes adata.layers['infog'] (normalized) + adata.var['highly_variable']
+```
+**Out:** `adata.layers["infog"]`; `adata.var["highly_variable"]`.
+
+## Step 3 — SVD embedding
+
+Runs after INFOG. Reduces the normalized data to 50 dimensions for the neighbor graph.
+
+```python
+piaso.tl.runSVDLazy(adata, layer="infog", infog_layer="counts",
+                    n_components=50, n_top_genes=2000, key_added="X_svd", random_state=1927)
+# writes adata.obsm['X_svd'] (n_obs x 50)
+```
+**Out:** `adata.obsm["X_svd"]` (n_obs × 50).
+
+## Step 4 — Neighbors + Leiden clustering
+
+Standard scanpy, on the SVD embedding. Writes cluster labels used by every downstream step.
+
+```python
+sc.pp.neighbors(adata, use_rep="X_svd", n_neighbors=15)
+sc.tl.leiden(adata, resolution=1.0, key_added="Leiden", flavor="igraph", n_iterations=2, directed=False)
+```
+**Out:** `adata.obs["Leiden"]` (cluster labels).
+
+## Step 5 — COSG marker genes
+
+Runs after clustering. COSG expects normalized/log values in `.X`, so point `.X` at the INFOG layer
+first. Writes marker recarrays per cluster.
+
+```python
+import cosg
+adata.X = adata.layers["infog"]          # COSG expects normalized/log values in .X (or a layer)
+cosg.cosg(adata, groupby="Leiden", key_added="cosg", n_genes_user=30, mu=1.0)
+# writes adata.uns['cosg'] = {'names': recarray, 'scores': recarray}, one field per cluster
+```
+**Out:** `adata.uns["cosg"]` (`names`, `scores` recarrays, one field per cluster).
+
+## Step 6 — GDR (marker-gene-guided DR)
+
+Final step. Builds a cell × cluster embedding by scoring every cell against each cluster's markers
+(runs COSG internally). Its width = number of clusters, not 50.
+
+```python
+piaso.tl.runGDR(adata, groupby="Leiden", n_gene=30, mu=1.0, layer="infog",
+                score_layer="infog", scoring_method="scanpy", key_added="X_gdr")
+# writes adata.obsm['X_gdr'] (n_obs x n_clusters)
+```
+**Out:** `adata.obsm["X_gdr"]` (n_obs × n_clusters); `adata.uns["gdr"]`.
+
+## Where to go next
+
+`adata.obsm["X_gdr"]` can drive `sc.pp.neighbors(use_rep="X_gdr")` for UMAP/re-clustering, and both
+`adata.uns["cosg"]` and `adata.obsm["X_gdr"]` feed marker-based annotation —
+see `marker_based_annotation.md`.
+
+
+<!-- ===== workflows/ligand_receptor.md ===== -->
+
+# Workflow — ligand–receptor / cell–cell communication
+
+Two tools in this ecosystem infer ligand–receptor interactions; **pick by whether the data is
+spatial** before writing any code. Both runnable paths below are executed and passing.
+
+## Decision rule — read this first
+
+Key off **spatial coordinates**:
+
+- **Spatial coordinates present** — Visium / Slide-seq / MERFISH / Xenium / Stereo-seq; coordinates
+  in `adata.obsm['spatial']` or `adata.obsm['X_spatial']`; the request mentions spatial neighborhoods
+  or tissue location → **LARIS** (`laris.tl.runLARIS`). LARIS bundles CellChatDB.
+- **No coordinates — dissociated single-cell RNA-seq** (expression + cell-type labels only) →
+  **PIASO SCALAR** (`piaso.tl.runSCALAR`). SCALAR needs a **user-supplied** LR-pair list and a
+  specificity matrix; there is no bundled DB.
+
+Routing a dissociated dataset to LARIS (its spatial kNN graph is meaningless without coordinates) or
+a spatial one to SCALAR is the failure mode to avoid. When both are possible, coordinates win → LARIS.
+
+## Install
+
+```bash
+pip install piaso-tools laris cosg "matplotlib<3.9"
+```
+
+`laris` pulls `cosg`; install `piaso-tools` for the SCALAR path. Both paths assume a clustered
+AnnData with cell-type / cluster labels (e.g. `adata.obs["Leiden"]` from
+`end_to_end_scrnaseq.md`) and a normalized layer such as `adata.layers["infog"]`.
+
+---
+
+## Path A — SCALAR (dissociated single-cell)
+
+`piaso.tl.runSCALAR` scores interaction = (ligand specificity in sender) × (receptor specificity in
+receiver), with an expression-matched permutation null. You supply **two things**: a
+`specificity_matrix` (a genes × cell-types DataFrame) and an `lr_pairs` DataFrame with
+`ligand`/`receptor` columns whose genes exist in the data.
+
+- **specificity_matrix:** the concrete, tested recipe is a z-scored per-cluster mean (below). You
+  *can* build it from COSG scores, but note `cosg.cosg` writes only the **top-N genes per cluster**
+  into `adata.uns['cosg']` (a recarray), so you must first assemble those into a full
+  genes × cell-types matrix yourself — the z-scored mean is simpler and covers all genes.
+- **lr_pairs:** there is no bundled DB, but you don't have to hand-write one — if `laris` is
+  installed you can reuse its CellChatDB as a ready-made list:
+  `lr = laris.datasets.lrDatabase(species="mouse")[["ligand","receptor"]]`, then filter to genes
+  present in `adata` (as below).
+
+```python
+import numpy as np, pandas as pd, piaso
+# specificity_matrix: genes x cell types — z-scored per-cluster mean (tested recipe)
+ct = adata.obs["Leiden"].astype(str)
+cell_types = sorted(ct.unique(), key=int)
+X = adata.layers["infog"]
+means = np.vstack([np.asarray(X[(ct==c).values].mean(0)).ravel() for c in cell_types]).T
+spec = pd.DataFrame(means, index=adata.var_names, columns=cell_types)
+spec = spec.sub(spec.mean(1), axis=0).div(spec.std(1).replace(0,1), axis=0)
+# lr_pairs: DataFrame with ligand/receptor columns, genes present in adata
+lr = pd.DataFrame([{"ligand":l,"receptor":r} for l,r in
+                   [("Nrxn1","Nlgn1"),("Nrxn3","Nlgn1"),("Efna5","Epha4")]
+                   if l in adata.var_names and r in adata.var_names])
+res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, n_permutations=200, random_seed=42)
+# DataFrame: ligand, receptor, sender, receiver, interaction_score, p_value, p_value_fdr, nlog10_p_value_fdr
+```
+**Out:** a DataFrame of sender→receiver interactions with scores and BH-FDR p-values (no AnnData
+mutation). Visualize with `piaso.pl.plotLigandReceptorInteraction` / `plotLigandReceptorLollipop`.
+
+**Before/after:** requires cluster labels + a normalized layer; produces a ranked interaction table.
+Permutation cost scales with (pairs × `n_permutations`).
+
+---
+
+## Path B — LARIS (spatial)
+
+`laris.tl.runLARIS` diffuses ligand × receptor products over a spatial kNN graph. It has two setup
+gotchas that this block handles explicitly.
+
+**Precondition:** `adata.obsm["X_spatial"]` must hold spatial coordinates. LARIS uses the key
+`X_spatial` (not scanpy's `spatial`) — set or pass it accordingly. The tutorial fixtures in this hub
+are dissociated (no coordinates), so use a real spatial object here.
+
+```python
+import laris, pandas as pd
+lrdb = laris.datasets.lrDatabase(species="mouse")            # bundled CellChatDB (3105 mouse pairs)
+# GOTCHA 1: filter LR-DB to pairs whose ligand AND receptor are both present in the data
+present = set(adata.var_names)
+lrdb_f = lrdb[lrdb["ligand"].isin(present) & lrdb["receptor"].isin(present)].copy()
+# GOTCHA 2: the groupby column must be a categorical dtype
+adata.obs["CellTypes"] = pd.Categorical(adata.obs["Leiden"].astype(str))
+lr_adata = laris.tl.prepareLRInteraction(adata, lr_df=lrdb_f, number_nearest_neighbors=10,
+                                         use_rep_spatial="X_spatial")
+res = laris.tl.runLARIS(lr_adata, adata=adata, groupby="CellTypes",
+                        n_permutations=100, n_top_lr=500, calculate_pvalues=True)
+# returns DataFrame (or tuple); cols: ligand, receptor, score, Rank
+```
+**Out:** an interaction table (with `by_celltype=True`, a tuple whose cell-type result has
+`sender, receiver, ligand, receptor, interaction_score, p_value, p_value_fdr`). Visualize with
+`laris.pl.plotCCCHeatmap` / `plotCCCNetwork` / `plotCCCDotPlot`.
+
+**Before/after:** requires spatial coordinates in `X_spatial`, cluster labels as a **categorical**,
+and an LR-DB **filtered to present genes** (both gotchas above; skipping either breaks the run). Pick
+`species="mouse"` vs `"human"` so DB gene symbols match `adata.var_names`.
+
+---
+
+## Summary
+
+| | SCALAR | LARIS |
+|---|---|---|
+| Data | dissociated scRNA-seq | spatial transcriptomics |
+| Coordinates | none | required (`obsm['X_spatial']`) |
+| LR pairs | user-supplied | bundled CellChatDB |
+| Function | `piaso.tl.runSCALAR` | `laris.tl.runLARIS` |
+
+
+<!-- ===== workflows/marker_based_annotation.md ===== -->
+
+# Workflow — marker-based cell-type annotation
+
+Annotate cell types by scoring each cell against per-cluster marker sets. Builds on a clustered
+AnnData: derive markers with COSG, then predict labels with PIASO's `predictCellTypeByMarker`,
+smoothing over the marker-guided embedding. Both blocks are executed and passing.
+
+## Install
+
+```bash
+pip install piaso-tools cosg "matplotlib<3.9"
+```
+
+## Prerequisites (what must already exist)
+
+This workflow **continues from `end_to_end_scrnaseq.md`**. Before starting, `adata` must have:
+`adata.layers["infog"]` (the scoring layer), `adata.obs["Leiden"]` (clusters), and
+`adata.obsm["X_gdr"]` (used to smooth predictions). Run the end-to-end workflow through Step 6 first
+if these are absent.
+
+## Step 1 — COSG markers → marker set dict
+
+Runs COSG on the clusters and reshapes its recarray output into a `{cluster: [genes]}` dict, which
+is the input `predictCellTypeByMarker` expects. (If you already ran Step 5 of the end-to-end
+workflow, `adata.uns["cosg"]` exists and you can skip straight to building `marker_set`.)
+
+```python
+import cosg
+adata.X = adata.layers["infog"]          # COSG expects normalized/log values in .X (or a layer)
+cosg.cosg(adata, groupby="Leiden", key_added="cosg", n_genes_user=30, mu=1.0)
+
+names = adata.uns["cosg"]["names"]
+marker_set = {cl: [names[cl][i] for i in range(len(names))] for cl in names.dtype.names}
+```
+**Out:** `marker_set` — `{cluster: [top genes]}`.
+
+## Step 2 — Predict cell types from the marker set
+
+Scores every cell against each cluster's marker set (over the `infog` layer), assigns the argmax
+label, then smooths the prediction across the `X_gdr` neighborhood. Writes the prediction plus a
+score matrix and confidence.
+
+```python
+import piaso
+piaso.tl.predictCellTypeByMarker(adata, marker_gene_set=marker_set, score_layer="infog",
+                                 use_rep="X_gdr", key_added="pred", smooth_prediction=True,
+                                 return_confidence=True)
+# writes adata.obs['pred'] (+ pred_raw/pred_smoothed/pred_score/pred_*_confidence) and adata.obsm['pred_score']
+```
+**Out:** `adata.obs["pred"]` (final label) + `adata.obsm["pred_score"]` (full score matrix). The
+`.obs` also gets `pred_score`, `pred_raw`, `pred_smoothed`, `pred_smoothed_confidence`, and
+`pred_confidence_smoothed` (verified against the current build — the exact set written).
+
+> **The `pred` labels mirror the keys of `marker_gene_set`.** If you keyed the marker set by
+> cluster ID (as above), `pred` is a (smoothed) cluster ID, not a biological name. To attach real
+> cell-type names, feed the same COSG marker set to `analyzeMarkers` (see
+> `markerdb_annotation.md`) and map its `top_hits` onto the clusters.
+
+## Notes
+
+- `marker_gene_set` can also be a curated set from PIASOmarkerDB or any hand-authored
+  `{cell_type: [genes]}` dict — you are not limited to COSG output.
+- `score_layer="infog"` and `use_rep="X_gdr"` are defaults that **must exist** on the object;
+  smoothing is skipped or errors if `X_gdr` is missing.
+- To infer cell-type *names* (rather than transfer cluster labels) from a marker gene list against a
+  curated database, use `markerdb_annotation.md` instead.
+
+
+<!-- ===== workflows/markerdb_annotation.md ===== -->
+
+# Workflow — cell-type inference from PIASOmarkerDB
+
+Infer cell types for a gene list by querying **PIASOmarkerDB**, a curated marker database, over its
+live REST API. Use this when you have a set of genes (e.g. cluster markers) and want to know which
+cell types they point to, drawing on published atlases rather than your own reference. Both blocks
+are executed and passing.
+
+## Install
+
+```bash
+pip install piaso-tools "matplotlib<3.9"
+```
+
+**Internet required.** PIASOmarkerDB is a **remote REST API client** (base
+`https://piaso.org/piasomarkerdb/api/v1/`) — it is not bundled data, so these blocks need network
+egress to `piaso.org`. This workflow is **Python-only**; there is no R client.
+
+## Step 1 — Query the database
+
+Explore what the DB contains and pull markers by filter. Returns pandas DataFrames (or lists for the
+`list_*` meta-queries). No AnnData involved.
+
+```python
+import piaso
+studies = piaso.tl.queryPIASOmarkerDB(list_studies=True)      # list[str], 36 studies
+df = piaso.tl.queryPIASOmarkerDB(cell_type="Microglia", limit=5)
+# columns: cell_type, condition, gene, species, specificity_score, study_publication, tissue
+df2 = piaso.tl.getMarkers(gene="AIF1", limit=3)               # getMarkers is an alias of queryPIASOmarkerDB
+```
+**Out:** DataFrames of marker records; `studies` is the list of available study keys. Filters
+accepted: `gene`, `cell_type`, `study`, `species`, `tissue`, `condition`, `min_score`, `max_score`,
+`limit`.
+
+## Step 2 — Infer cell types for a gene list
+
+Pass a gene list to `analyzeMarkers`; it queries the DB for each gene, groups hits by
+(cell_type, study, species, tissue, condition), and ranks contexts by matched-gene count then
+average specificity. A plain list returns a ranked DataFrame.
+
+```python
+res = piaso.tl.analyzeMarkers(["AIF1", "P2RY12", "CX3CR1", "CSF1R"], n_top_genes=50)  # infer cell type
+# DataFrame cols: cell_type, study_publication, species, tissue, condition,
+#                 matched_gene_count, matched_genes, avg_specificity
+```
+**Out:** ranked DataFrame of candidate cell types for the gene list (top row = best match).
+
+## Notes
+
+- `analyzeMarkers` also accepts a COSG-style DataFrame (columns = clusters) or a
+  `{cluster: [genes]}` dict; those inputs return a `(results_dict, top_hits)` **tuple**, where
+  `top_hits[cluster]` is a plain **cell-type-name string** (or `"Unassigned"`) — not a DataFrame
+  or nested dict. Map it straight onto clusters, e.g.
+  `adata.obs["cell_type"] = adata.obs["Leiden"].map(top_hits)`.
+- This composes with `marker_based_annotation.md`: `predictCellTypeByMarker` transfers the
+  *marker-set keys* onto cells (cluster IDs, if that's what you keyed the marker set by), so to
+  attach real biological names, feed the same COSG marker set to `analyzeMarkers` and map its
+  `top_hits` back onto the clusters.
+- Narrow noisy results with `species` / `tissue` / `studies` (validated against `list_studies`;
+  unknown study names raise a `ValidationError`), or `exclude_studies` / `exclude_cell_types`.
+- This complements `marker_based_annotation.md`: that workflow transfers **your** cluster labels via
+  scoring; this one names cell types from a **curated public** database.
+
+
+<!-- ===== gotchas.md ===== -->
+
+# Ecosystem-wide gotchas
+
+A tight reference of traps that span the PIASO ecosystem. Component-specific detail lives in
+each `components/*.md`.
+
+## Install / import
+
+- **PIASO requires `matplotlib < 3.9` — pin it or `import piaso` fails.** PIASO 1.1.0 imports
+  `piaso/plotting/color.py` at package import time, and that module calls
+  `matplotlib.cm.get_cmap(...)` — an API **removed in matplotlib 3.9**. Because
+  `piaso/__init__.py` loads `pl` → `color`, this runs on every `import piaso`, so under
+  matplotlib ≥ 3.9 the import raises before you can do anything. PIASO's `pyproject.toml`
+  only declares `matplotlib>=3.5.2` (no upper cap), so nothing enforces this for you. Always
+  install with `pip install piaso-tools "matplotlib<3.9"` (the working env uses 3.8.4).
+  Upstream fix would be `plt.get_cmap` / `matplotlib.colormaps`.
+
+- **Emergene pins `annoy < 1.17.0`; PIASO `stitchSpace` (BBKNN) segfaults with newer annoy.**
+  `pip install emergene` caps `annoy<1.17.0` for this reason. PIASO's `stitchSpace` uses
+  BBKNN and warns hard that `annoy >= 1.17` causes a **BBKNN segfault** — pin
+  `annoy==1.16.3` when running it. (`stitchSpace` also rejects `use_rep` embeddings
+  containing NaN/Inf, which would otherwise segfault BBKNN.)
+
+## Data / layer contracts
+
+- **INFOG (`piaso.tl.infog`) needs RAW counts.** Give it raw UMI counts (from `adata.X` or a
+  raw-counts layer); it rejects negatives. Keep a copy of the raw counts (e.g.
+  `adata.layers['counts'] = adata.X.copy()`) before other steps overwrite `.X`. INFOG's
+  output layer defaults to `infog`.
+
+- **`piaso.tl.score` defaults to `layer='infog'` (NORMALIZED values), not raw counts.** It
+  expects INFOG-normalized values and **errors if the `infog` layer is absent**. This is the
+  opposite input from `infog` itself — run INFOG first, then score off its output layer.
+  Genes not in `adata.var_names` are silently dropped. Single-set vs multi-set input changes
+  the behavior drastically (writes to `adata` + returns None vs returns a tuple).
+
+- **COSG expects NORMALIZED / log values in `.X` (or a layer).** Point `.X` (or `layer=`) at
+  normalized values before calling `cosg.cosg(...)` — e.g. `adata.X = adata.layers['infog']`.
+  Feeding raw counts gives wrong markers.
+
+- **COSG is a dependency, not a re-export.** `piaso-tools` and `laris` both hard-depend on
+  `cosg` (auto-installed) and call `cosg.cosg(...)` internally, but there is **no
+  `piaso.cosg`** — to call COSG yourself you still `import cosg`.
+
+## LARIS (spatial ligand–receptor)
+
+- **Filter the LR database to genes actually present in the data.** `laris.datasets.lrDatabase`
+  returns the full CellChatDB (mouse 3105 / human 2951 pairs). Keep only pairs whose ligand
+  **and** receptor are both in `adata.var_names` before running, e.g.
+  `lrdb[lrdb['ligand'].isin(present) & lrdb['receptor'].isin(present)]`.
+
+- **The `groupby` column must be a categorical dtype.** Cast it explicitly, e.g.
+  `adata.obs['CellTypes'] = pd.Categorical(adata.obs['Leiden'].astype(str))`, before calling
+  `laris.tl.runLARIS`.
+
+## PIASOmarkerDB
+
+- **PIASOmarkerDB is a REMOTE REST API — it needs internet.** The client
+  (`piaso.tl.queryPIASOmarkerDB` / `getMarkers` / `analyzeMarkers` / the `PIASOmarkerDB`
+  class) issues HTTP calls to `https://piaso.org/piasomarkerdb/api/v1/`; it is **not
+  wheel-bundled data**. It is Python-only, requires `requests`, and caches under
+  `~/.piaso/markers`. Any offline/bundled use (e.g. an MCP tool) must proxy the live API or
+  obtain a raw snapshot + redistribution license from the maintainers first.
+
+
+<!-- ===== data.md ===== -->
+
+# PIASO-data — fixtures for every code block
+
+Every runnable code block in this hub loads from **PIASO-data**, the ecosystem's data repository
+(`github.com/genecell/PIASO-data`). It has two halves: **tutorial datasets** hosted on Zenodo, and
+**genome reference files** committed directly in the repo. Code blocks should use the small tutorial
+fixtures below so they stay cheap to run.
+
+## Zenodo record
+
+- Record: <https://zenodo.org/records/19699639>
+- DOI: **10.5281/zenodo.19699639**
+
+Each tutorial dataset is a single file on that record. Fetch it by the direct content URL pattern:
+
+```
+https://zenodo.org/api/records/19699639/files/<filename>/content
+```
+
+You can download programmatically (`piaso.data.load_dataset(id)` / `fetch_dataset(id)`, cached under
+`~/.piaso/data/datasets/`) or just fetch the URL directly with `curl`/`wget`/`requests`.
+
+## Smallest fixtures — use these in code blocks
+
+| Purpose | id | filename | size | reference |
+|---|---|---|---|---|
+| Loadable AnnData (real scRNA object) | `e18_v3_nuclei` | `SC3_v3_NextGem_DI_Nuclei_5K_SC3_v3_NextGem_DI_Nuclei_5K_count_sample_feature_bc_matrix.h5` | **20.25 MB** (20,250,624 B) | 10x Genomics public (E18 mouse brain nuclei, 5K, v3.1) |
+| PIASOmarkerDB marker CSV | `piaso_markerdb_allen_immune` | `PIASOmarkerDB_AllenHumanImmuneHealthAtlas_L2_251219.csv` | **117 KB** (117,350 B) | Gong et al. Nature 648, 696–706 (2025) |
+
+`e18_v3_nuclei` is a 10x `.h5` (~5,000 cells) — the smallest real expression matrix — and is what
+the workflow blocks load. Fetch and load it:
+
+```bash
+curl -L -o e18_v3_nuclei.h5 \
+  "https://zenodo.org/api/records/19699639/files/SC3_v3_NextGem_DI_Nuclei_5K_SC3_v3_NextGem_DI_Nuclei_5K_count_sample_feature_bc_matrix.h5/content"
+```
+```python
+import scanpy as sc
+adata = sc.read_10x_h5("e18_v3_nuclei.h5")   # PIASO-data fixture, ~5k cells
+adata.var_names_make_unique()
+```
+
+`piaso_markerdb_allen_immune` is a 117 KB CSV — the smallest fixture overall — for offline marker
+work. Note that the **live PIASOmarkerDB REST API** (used by `queryPIASOmarkerDB` / `analyzeMarkers`)
+is a separate remote service and needs internet; this CSV is a published static slice, not the API.
+
+md5 checksums (for verification): `e18_v3_nuclei` = `81a6ceb41e2def93ac0d0f824a610849`;
+`piaso_markerdb_allen_immune` = `d4177960c47f995562ad572bb8a5f9f7`.
+
+## Larger datasets — exist, but avoid in tests
+
+The record also holds full atlases that are **too large for routine code blocks / CI** — do not use
+them in tests:
+
+- `sea_ad_mtg_20k` — SEA-AD MTG 20K human snRNA `.h5ad`, **1.92 GB** (Gabitto et al. Nat Neurosci 2024).
+- `adult_cortex_multiome_rna` — Adult Mouse Cortex Multiome RNA `.h5ad`, **2.66 GB** (Bravo
+  González-Blas et al. Nat Methods 2023).
+
+Mid-size 10x `.h5` options (all mouse/human scRNA, tens of MB) also exist —
+`mouse_brain_10k_gemx` (68.7 MB), `e18_v3_cell` (47.6 MB), `e18_v4_cell` (67.6 MB),
+`pbmc_multiome_san1` (76.7 MB), `pbmc_multiome_san2` (87.8 MB) — but `e18_v3_nuclei` at 20 MB is the
+lightest and is the default fixture here. All tutorial data is scRNA/snRNA: **no spatial and no
+standalone ATAC matrices are shipped**, so spatial workflows (LARIS) must supply their own
+coordinates.
+
+## Genome references (committed in-repo)
+
+Separately, `hg38/` and `mm10/` directories hold ENCODE/UCSC-derived annotation supports (gene
+bodies, promoters, cCRE CTCF sites, TSS, chrom sizes; ~17 MB / ~11 MB), fetched via
+`piaso.data.fetch_genome("hg38"|"mm10")`. These support ATAC/epigenomic analyses and are not needed
+by the RNA workflows in this hub.
+
+## License
+
+PIASO-data has **no LICENSE file**; the README states genome files derive from public UCSC/ENCODE
+annotations and tutorial datasets are **redistributed under CC BY 4.0 with attribution to original
+sources**. Cite the original dataset paper (the `reference` column above) when using a fixture.

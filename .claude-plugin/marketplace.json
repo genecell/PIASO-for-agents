@@ -1,0 +1,15 @@
+{
+  "name": "PIASO-for-agents",
+  "owner": {
+    "name": "Min Dai",
+    "email": "dai@broadinstitute.org",
+    "url": "https://piaso.org"
+  },
+  "plugins": [
+    {
+      "name": "piaso",
+      "source": "./dist/claude",
+      "description": "PIASO single-cell omics ecosystem: marker genes (COSG/COSGR), gene-set scoring, cell-type annotation, ligand-receptor analysis (SCALAR/LARIS), differential expression (Emergene)."
+    }
+  ]
+}

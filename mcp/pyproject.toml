@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "piaso-mcp"
+version = "0.0.1"
+description = "Local stdio MCP server for the PIASO single-cell omics ecosystem — serves knowledge and public data (PIASOmarkerDB via the live piaso.org API), never compute or user data."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+authors = [{ name = "Min Dai", email = "dai@broadinstitute.org" }]
+dependencies = [
+    "mcp>=1.2.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+piaso-mcp = "piaso_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["piaso_mcp"]
+# The bundled canonical snapshot (piaso_mcp/data/*.md, meta.yaml) is generated into
+# dist/mcp by build.py; hatchling includes it because it lives inside the package dir.
+artifacts = ["piaso_mcp/data/**"]
