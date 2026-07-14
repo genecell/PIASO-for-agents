@@ -1,0 +1,59 @@
+name: publish-mcp
+# Publish the piaso-mcp package to PyPI via Trusted Publishing (OIDC — no API token stored).
+#
+# ONE-TIME SETUP (on PyPI, before the first run):
+#   pypi.org -> your account -> Publishing -> "Add a pending publisher":
+#     PyPI Project Name: piaso-mcp
+#     Owner:            genecell
+#     Repository name:  PIASO-for-agents
+#     Workflow name:    publish-mcp.yml
+#     Environment name: (leave BLANK — no repo environment needed; this is the simple setup)
+#   That's it. OIDC below (`id-token: write`) is all the auth required — no API token.
+#
+# OPTIONAL hardening: if you'd rather gate releases behind required reviewers, put an
+# environment name (e.g. "pypi") in the PyPI form above, create a matching repo Environment
+# (Settings -> Environments) with your protection rules, and add `environment: pypi` to the
+# publish job below. Not required.
+#
+# TO RELEASE: bump `version` in mcp/pyproject.toml, commit, then cut a GitHub Release
+# (or run this workflow manually). The version published is whatever is in mcp/pyproject.toml;
+# PyPI rejects a re-used version, so always bump.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install build pyyaml
+      - name: Regenerate dist/mcp from canonical/ (bundles the docs snapshot)
+        run: python build.py
+      - name: Build wheel + sdist from dist/mcp
+        run: |
+          cd dist/mcp
+          python -m build --outdir "$GITHUB_WORKSPACE/wheelhouse" .
+      - name: Smoke-test the built wheel in a clean venv
+        run: |
+          python -m venv /tmp/t
+          /tmp/t/bin/pip install wheelhouse/*.whl
+          /tmp/t/bin/python -c "from piaso_mcp import server as s; assert 'COSGR' in s.resolve_install(['cosg'],'r'); assert (s.DATA / 'meta.yaml').exists(); print('wheel OK')"
+      - uses: actions/upload-artifact@v4
+        with: { name: piaso-mcp-dist, path: wheelhouse/ }
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write           # OIDC token for Trusted Publishing — no password/token needed
+    # (optional) add `environment: pypi` here only if you set an Environment name on PyPI
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: piaso-mcp-dist, path: wheelhouse/ }
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: wheelhouse/

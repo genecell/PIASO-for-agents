@@ -1,0 +1,15 @@
+name: sync-check
+# Fails if dist/ is out of sync with canonical/ — the drift guard that makes the
+# "nothing downstream is hand-edited" contract credible.
+on:
+  push: { branches: [master] }
+  pull_request:
+jobs:
+  sync-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install pyyaml
+      - run: python build.py --check
