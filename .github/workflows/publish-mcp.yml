@@ -1,5 +1,8 @@
 name: publish-mcp
 # Publish the piaso-mcp package to PyPI via Trusted Publishing (OIDC — no API token stored).
+# The MCP Registry is a SEPARATE workflow (publish-registry.yml, run manually) — kept apart so
+# the critical PyPI publish stays decoupled from the more fragile registry step and the PyPI
+# indexing delay it depends on.
 #
 # ONE-TIME SETUP (on PyPI, before the first run):
 #   pypi.org -> your account -> Publishing -> "Add a pending publisher":

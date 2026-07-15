@@ -1,5 +1,8 @@
 # piaso-mcp
 
+<!-- Ownership marker for the official MCP Registry (verifies this PyPI package is ours). -->
+mcp-name: io.github.genecell/piaso-mcp
+
 A **local stdio MCP server** for the PIASO ecosystem. Serves **knowledge and public data
 only — never compute, never user data, never your expression matrices.**
 

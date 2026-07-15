@@ -1,0 +1,48 @@
+name: publish-registry
+# Register piaso-mcp in the official MCP Registry (registry.modelcontextprotocol.io) via GitHub
+# OIDC — no tokens. Kept SEPARATE from publish-mcp.yml (PyPI) on purpose:
+#   - the PyPI publish stays decoupled from this more fragile step;
+#   - the registry verifies ownership by fetching the PyPI package's `mcp-name:` marker, so it
+#     must run AFTER PyPI has indexed the new version — run this manually once PyPI is live.
+#
+# HOW TO RELEASE: cut a GitHub Release (publish-mcp.yml uploads to PyPI) → confirm the new
+# version is live on pypi.org → then run THIS workflow (Actions tab → publish-registry → Run).
+# server.json's version is synced from mcp/pyproject.toml, so you only bump the version once.
+#
+# ONE-TIME: nothing to configure on the registry side for the io.github.genecell/* namespace —
+# OIDC from this repo (owner genecell) authorizes it. First run: consider `mcp-publisher init`
+# locally once to confirm the current server.json schema, then reconcile mcp/server.json.
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-registry:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write           # OIDC identity for the io.github.genecell namespace
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync server.json version to mcp/pyproject.toml
+        run: |
+          python - <<'PY'
+          import re, json, pathlib
+          ver = re.search(r'^version\s*=\s*"([^"]+)"', pathlib.Path("mcp/pyproject.toml").read_text(), re.M).group(1)
+          p = pathlib.Path("mcp/server.json"); d = json.loads(p.read_text())
+          d["version"] = ver
+          for pkg in d.get("packages", []):
+              pkg["version"] = ver
+          p.write_text(json.dumps(d, indent=2) + "\n")
+          print("server.json version ->", ver)
+          PY
+      - name: Install mcp-publisher (latest linux/amd64)
+        run: |
+          url=$(curl -s https://api.github.com/repos/modelcontextprotocol/registry/releases/latest \
+            | grep -o 'https://[^"]*mcp-publisher[^"]*linux_amd64.tar.gz' | head -1)
+          echo "Downloading $url"
+          curl -L "$url" | tar xz mcp-publisher
+      - name: Publish to the MCP Registry
+        working-directory: mcp
+        run: |
+          "$GITHUB_WORKSPACE/mcp-publisher" login github-oidc
+          "$GITHUB_WORKSPACE/mcp-publisher" publish
