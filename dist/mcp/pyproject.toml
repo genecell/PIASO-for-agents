@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "piaso-mcp"
-version = "0.0.1"
+version = "0.0.2"
 description = "Local stdio MCP server for the PIASO single-cell omics ecosystem — serves knowledge and public data (PIASOmarkerDB via the live piaso.org API), never compute or user data."
 readme = "README.md"
 requires-python = ">=3.10"
