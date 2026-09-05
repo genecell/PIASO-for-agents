@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.genecell/piaso-mcp",
-  "description": "PIASO single-cell omics docs + live PIASOmarkerDB, for coding agents.",
-  "version": "0.0.2",
+  "description": "PIASO single-cell ecosystem docs (PIASO, COSG, cytome, LARIS, cytorete) + live PIASOmarkerDB",
+  "version": "0.1.0",
   "repository": {
     "url": "https://github.com/genecell/PIASO-for-agents",
     "source": "github"
@@ -13,7 +13,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "piaso-mcp",
-      "version": "0.0.2",
+      "version": "0.1.0",
       "transport": {
         "type": "stdio"
       }

@@ -1,76 +1,98 @@
-# PIASO-data — fixtures for every code block
+# PIASO-data — datasets and reference files for every code block
 
 Every runnable code block in this hub loads from **PIASO-data**, the ecosystem's data repository
-(`github.com/genecell/PIASO-data`). It has two halves: **tutorial datasets** hosted on Zenodo, and
-**genome reference files** committed directly in the repo. Code blocks should use the small tutorial
-fixtures below so they stay cheap to run.
+(`github.com/genecell/PIASO-data`). It has two halves: **tutorial datasets** on Zenodo and
+**genome reference files** committed in the repo. `piaso.data` is the client: it reads the
+registry (`datasets.json`, fetched from the repo and cached 24 h), downloads on demand, verifies
+md5, and caches under `~/.piaso/data/` (override with `data_dir=`, `piaso.settings.data_dir`, or
+`PIASO_DATA_DIR`).
 
 ## Zenodo record
 
-- Record: <https://zenodo.org/records/19699639>
-- DOI: **10.5281/zenodo.19699639**
+- Concept DOI (always the latest version): **10.5281/zenodo.19699638**
+- Current record: <https://zenodo.org/records/22012620> (v0.9.0, 2026-08-22; the older record
+  19699639 still resolves)
+- Direct file URL pattern: `https://zenodo.org/api/records/22012620/files/<filename>/content`
 
-Each tutorial dataset is a single file on that record. Fetch it by the direct content URL pattern:
+## The registry, from Python
 
+```python
+import piaso
+piaso.data.list_datasets()                       # table of every dataset with size
+info = piaso.data.dataset_info("e18_v3_nuclei")  # dict: title, url, md5, size_bytes, cells, format, counts_layer, tutorials
+path = piaso.data.fetch_dataset("e18_v3_nuclei") # download + md5-verify, return the local Path
+adata = piaso.data.load_dataset("e18_v3_nuclei") # download + open (AnnData for h5ad / 10x h5, DataFrame for csv)
+ds = piaso.data.load_dataset("sea_ad_mtg_20k_cytome", return_type="cytome")  # open cytome Dataset
 ```
-https://zenodo.org/api/records/19699639/files/<filename>/content
-```
 
-You can download programmatically (`piaso.data.load_dataset(id)` / `fetch_dataset(id)`, cached under
-`~/.piaso/data/datasets/`) or just fetch the URL directly with `curl`/`wget`/`requests`.
+`load_dataset(..., return_type="cytome")` on an h5ad/h5 entry converts once and reopens the file
+on later calls. **Check `counts_layer`** before normalizing: `sea_ad_mtg_20k` keeps UMIs in
+`layers["UMIs"]`, `adult_cortex_multiome_rna` in `layers["raw"]` (its `.X` is scaled — 93 % of the
+values are negative); the 10x `.h5` entries have raw counts in `.X`.
 
-## Smallest fixtures — use these in code blocks
+## Datasets (registry v2, 2026-09-04)
 
-| Purpose | id | filename | size | reference |
-|---|---|---|---|---|
-| Loadable AnnData (real scRNA object) | `e18_v3_nuclei` | `SC3_v3_NextGem_DI_Nuclei_5K_SC3_v3_NextGem_DI_Nuclei_5K_count_sample_feature_bc_matrix.h5` | **20.25 MB** (20,250,624 B) | 10x Genomics public (E18 mouse brain nuclei, 5K, v3.1) |
-| PIASOmarkerDB marker CSV | `piaso_markerdb_allen_immune` | `PIASOmarkerDB_AllenHumanImmuneHealthAtlas_L2_251219.csv` | **117 KB** (117,350 B) | Gong et al. Nature 648, 696–706 (2025) |
+| id | format | size | species | cells | counts | reference |
+|---|---|---|---|---|---|---|
+| `e18_v3_nuclei` | 10x h5 | **19.3 MB** | mouse | ~5,000 | `.X` | 10x Genomics (E18 brain nuclei 5K v3.1) |
+| `e18_v3_cell` | 10x h5 | 45.4 MB | mouse | ~10,000 | `.X` | 10x Genomics |
+| `e18_v4_cell` | 10x h5 | 64.5 MB | mouse | ~10,000 | `.X` | 10x Genomics |
+| `mouse_brain_10k_gemx` | 10x h5 | 65.5 MB | mouse | 11,357 | `.X` | 10x Genomics |
+| `pbmc_multiome_san1` | 10x h5 (RNA+ATAC) | 73.2 MB | human | 3,545 | `.X` | De Rop et al. Nat Biotechnol 42, 916–926 (2024) |
+| `pbmc_multiome_san2` | 10x h5 (RNA+ATAC) | 83.7 MB | human | 4,360 | `.X` | De Rop et al. (2024) |
+| `piaso_markerdb_allen_immune` | csv | **0.1 MB** | human | — | — | Gong et al. Nature 648, 696–706 (2025) |
+| `sea_ad_mtg_20k` | h5ad | 1.79 GB | human | 20,000 | `layers["UMIs"]` | Gabitto et al. Nat Neurosci 27, 2366–2383 (2024) |
+| `adult_cortex_multiome_rna` | h5ad | 2.48 GB | mouse | 17,412 | `layers["raw"]` | Bravo González-Blas et al. Nat Methods 20, 1355–1367 (2023) |
+| `sea_ad_mtg_20k_cytome` | **cytome** | 269 MB | human | 20,000 | `RNA_counts` | Gabitto et al. (2024) |
+| `adult_cortex_multiome_rna_cytome` | cytome | 192 MB | mouse | 17,412 | `RNA_counts` | Bravo González-Blas et al. (2023) |
+| `allen_devvis_rna` | cytome | 1.41 GB | mouse | 200,061 | `RNA_counts` | Gao et al. Nature 647, 127–142 (2025) |
+| `humandevcx_38_rna` | cytome | 1.14 GB | human | 213,090 | `RNA_counts` | Wang et al. Nature 647, 169–178 (2025) |
+| `humanlifespan_pfc_rna` | cytome | 25.7 GB | human | 1,501,089 | `RNA_counts` | Catching et al. Cell Reports 45, 117110 (2026) |
 
-`e18_v3_nuclei` is a 10x `.h5` (~5,000 cells) — the smallest real expression matrix — and is what
-the workflow blocks load. Fetch and load it:
+Every `.cytome` entry stores raw UMI counts (verified integer at conversion) plus the source
+atlas's cell annotations, ready to stream: `piaso.data.load_dataset(name, return_type="cytome")`.
+
+## Fixtures used by the hub's tests
+
+| Purpose | id / file | size | md5 |
+|---|---|---|---|
+| Loadable AnnData / cytome (real scRNA) | `e18_v3_nuclei` → `SC3_v3_NextGem_DI_Nuclei_5K_..._count_sample_feature_bc_matrix.h5` | 19.3 MB | `81a6ceb41e2def93ac0d0f824a610849` |
+| PIASOmarkerDB static slice (offline marker work) | `piaso_markerdb_allen_immune` → `PIASOmarkerDB_AllenHumanImmuneHealthAtlas_L2_251219.csv` | 115 KB | `d4177960c47f995562ad572bb8a5f9f7` |
+| **Spatial** (LARIS, image-less) | `adata_tonsil.h5ad` — Slide-tags human tonsil, 5,695 cells × 25,583 genes, `obsm['X_spatial']`, `obs['cell_type']`, from LARIS's Zenodo record **10.5281/zenodo.19981287** (not part of PIASO-data) | 241 MB | — |
+| cytorete real run (opt-in, nightly) | `sea_ad_mtg_20k_cytome` + `piaso.data.fetch_jaspar()` + `fetch_2bit("hg38")` (~800 MB) + `fetch_genome("hg38")` | ~1.1 GB | — |
+
+Load the small fixture without `piaso.data` (e.g. in a cosg-only or cytome-only environment):
 
 ```bash
 curl -L -o e18_v3_nuclei.h5 \
-  "https://zenodo.org/api/records/19699639/files/SC3_v3_NextGem_DI_Nuclei_5K_SC3_v3_NextGem_DI_Nuclei_5K_count_sample_feature_bc_matrix.h5/content"
+  "https://zenodo.org/api/records/22012620/files/SC3_v3_NextGem_DI_Nuclei_5K_SC3_v3_NextGem_DI_Nuclei_5K_count_sample_feature_bc_matrix.h5/content"
 ```
 ```python
-import scanpy as sc
-adata = sc.read_10x_h5("e18_v3_nuclei.h5")   # PIASO-data fixture, ~5k cells
-adata.var_names_make_unique()
+import piaso
+adata = piaso.pp.read_10x_h5("e18_v3_nuclei.h5")   # raw UMI counts in .X, ~5k nuclei
 ```
 
-`piaso_markerdb_allen_immune` is a 117 KB CSV — the smallest fixture overall — for offline marker
-work. Note that the **live PIASOmarkerDB REST API** (used by `queryPIASOmarkerDB` / `analyzeMarkers`)
-is a separate remote service and needs internet; this CSV is a published static slice, not the API.
+The multi-GB atlases exist for the tutorials that need them (GDR at scale, 1.5M cells) — do
+not use them in CI. **PIASO-data still ships no spatial dataset**; the hub's spatial blocks run on
+the LARIS tonsil object above, and the Xenium / Stereo-seq / MERFISH blocks are lifted from the
+executed piaso.org tutorials (which download from 10x / CNGB / the original providers).
 
-md5 checksums (for verification): `e18_v3_nuclei` = `81a6ceb41e2def93ac0d0f824a610849`;
-`piaso_markerdb_allen_immune` = `d4177960c47f995562ad572bb8a5f9f7`.
+## Genome and motif references (via `piaso.data`)
 
-## Larger datasets — exist, but avoid in tests
+```python
+piaso.data.fetch_genome("hg38")      # gene bodies, promoters, TSS BED, cCREs, chrom sizes (also "mm10"); GTF optional
+piaso.data.fetch_2bit("hg38")        # UCSC .2bit genome sequence, ~800 MB, opt-in
+piaso.data.fetch_jaspar()            # JASPAR CORE vertebrates MEME
+piaso.data.load_lr_database("mouse") # CellChatDB (human 2951 / mouse 3105 pairs) — SCALAR and LARIS input
+piaso.data.load_chembl_targets()     # ChEMBL drug-target gene sets
+piaso.data.fetch_screen("hg38")      # SCREEN cCRE registry
+```
 
-The record also holds full atlases that are **too large for routine code blocks / CI** — do not use
-them in tests:
-
-- `sea_ad_mtg_20k` — SEA-AD MTG 20K human snRNA `.h5ad`, **1.92 GB** (Gabitto et al. Nat Neurosci 2024).
-- `adult_cortex_multiome_rna` — Adult Mouse Cortex Multiome RNA `.h5ad`, **2.66 GB** (Bravo
-  González-Blas et al. Nat Methods 2023).
-
-Mid-size 10x `.h5` options (all mouse/human scRNA, tens of MB) also exist —
-`mouse_brain_10k_gemx` (68.7 MB), `e18_v3_cell` (47.6 MB), `e18_v4_cell` (67.6 MB),
-`pbmc_multiome_san1` (76.7 MB), `pbmc_multiome_san2` (87.8 MB) — but `e18_v3_nuclei` at 20 MB is the
-lightest and is the default fixture here. All tutorial data is scRNA/snRNA: **no spatial and no
-standalone ATAC matrices are shipped**, so spatial workflows (LARIS) must supply their own
-coordinates.
-
-## Genome references (committed in-repo)
-
-Separately, `hg38/` and `mm10/` directories hold ENCODE/UCSC-derived annotation supports (gene
-bodies, promoters, cCRE CTCF sites, TSS, chrom sizes; ~17 MB / ~11 MB), fetched via
-`piaso.data.fetch_genome("hg38"|"mm10")`. These support ATAC/epigenomic analyses and are not needed
-by the RNA workflows in this hub.
+`hg38/` and `mm10/` in the repo hold the ENCODE/UCSC-derived BED files (~17 MB / ~11 MB) that
+`fetch_genome` downloads; cytorete needs the TSS BED plus the `.2bit` sequence.
 
 ## License
 
-PIASO-data has **no LICENSE file**; the README states genome files derive from public UCSC/ENCODE
+PIASO-data has **no LICENSE file**; its README states genome files derive from public UCSC/ENCODE
 annotations and tutorial datasets are **redistributed under CC BY 4.0 with attribution to original
 sources**. Cite the original dataset paper (the `reference` column above) when using a fixture.

@@ -1,19 +1,24 @@
 # meta.yaml — the single source of the component version matrix, trigger vocabulary,
-# per-component citations, licenses, and cross-component decision rules.
-# Every generated target (Claude skill description, Cursor rule description, llms.txt
-# summary, MCP tool metadata) consumes this file. Hand-maintained; canonical/ prose and
-# dist/ artifacts are generated from it + the markdown in canonical/.
+# per-component citations, licenses, cross-component decision rules, and the piaso.org
+# tutorial index. Every generated target (Claude skill description, Cursor rule
+# description, llms.txt summary, MCP tool metadata, "tested against" lines) consumes this
+# file. Hand-maintained; canonical/ prose and dist/ artifacts are generated from it + the
+# markdown in canonical/.
 #
 # Versions below are the ones the code-block test suite currently runs against; the CI
-# suite re-pins them on each component release.
+# suite installs exactly these pins (tests/requirements.txt is generated from here).
 
 hub:
   name: PIASO-for-agents
+  version: "0.2.0"
+  tested_on: "2026-09-04"
   description: >-
     Agent-neutral knowledge hub for the PIASO single-cell omics ecosystem
     (Gord Fishell Lab, HMS / Broad). One canonical source generates every
     agent format (Claude skill, Cursor rules, AGENTS.md, llms.txt, MCP).
   homepage: https://piaso.org
+  tutorials: https://piaso.org/tutorials/
+  api_reference: https://piaso.org/api/
   source: https://github.com/genecell/PIASO-for-agents
   license: BSD-3-Clause
   maintainer: "Min Dai <dai@broadinstitute.org>"
@@ -24,103 +29,205 @@ hub:
     Authored by the PIASO maintainers (The Fishell Laboratory, HMS / Broad).
     Disclose this on any third-party contribution (e.g. the
     anthropics/knowledge-work-plugins PR).
+  see_also:
+    - name: stato
+      url: https://stato.hiniki.com
+      role: "structured expertise management for long computational projects (not an analysis package)"
+    - name: PlanDrop
+      url: https://plandrop.ai
+      role: "plan-review-execute driver for Claude Code on remote machines (not an analysis package)"
 
 # ---------------------------------------------------------------------------
-# Component version matrix. `re_exported_through_piaso` is the load-bearing column:
-# COSG is a hard dependency of piaso-tools and is called internally, but is NOT
-# exposed under the piaso.* namespace — users still `import cosg`.
+# Component version matrix. The ecosystem is: analysis layer (PIASO), storage
+# (cytome + cytome-r), method packages (COSG/COSGR, LARIS, Emergene, cytorete), data
+# (PIASO-data). Dependencies run one way: cytorete -> piaso-tools -> cosg + cytome;
+# laris -> cosg (cytome optional). COSG is called internally by PIASO/LARIS but is NOT
+# re-exported under piaso.* — users still `import cosg`.
 # ---------------------------------------------------------------------------
 components:
   - id: piaso
+    name: PIASO
+    role: "analysis layer: QC, doublets, INFOG normalization, SVD/GDR, clustering, annotation, gene-set scoring (PIASOscore), SCALAR, plotting, piaso.data"
     repo: https://github.com/genecell/PIASO
-    language: [python]                       # + bundled Rust extension (piaso._piaso_score)
+    docs: https://piaso.org
+    language: [python]                       # + bundled Rust extension (wheels for Linux/macOS/Windows, py3.9-3.12)
     pypi: piaso-tools
-    import: piaso                            # submodules: piaso.tl|tools, piaso.pp|preprocessing, piaso.pl|plotting
+    conda: "bioconda::piaso (lags PyPI — 1.0.3 at last check; prefer pip)"
+    import: piaso                            # piaso.tl|tools, piaso.pp|preprocessing, piaso.pl|plotting, piaso.data, piaso.settings
     aliases: {tools: tl, preprocessing: pp, plotting: pl}   # runtime-identical objects
-    version_last_tested: "1.1.0"
+    version_last_tested: "1.2.3"
+    min_version_for_docs: "1.2.3"            # predictCellTypeByGDR discarded its result on AnnData before 1.2.3
     license: BSD-3-Clause
-    install: 'pip install piaso-tools "matplotlib<3.9"'
-    depends_on: [cosg]                       # hard dep; auto-installed with piaso-tools
+    install: "pip install piaso-tools"
+    extras: {scanpy: "pip install 'piaso-tools[scanpy]'  # interop only; core needs no scanpy", leiden: "pip install 'piaso-tools[leiden]'", harmony: "pip install 'piaso-tools[harmony]'"}
+    depends_on: [cosg, cytome]               # both hard deps, auto-installed
     re_exported_through_piaso: n/a
+    accepts: [AnnData, cytome]               # every pp/tl/pl function takes data= AnnData | open cytome Dataset | .cytome path
     citation_id: piaso_nature_2026
 
   - id: cosg
+    name: COSG
+    role: "marker gene / marker region identification by cosine specificity; analytic p-values; GPU; streams from cytome"
     repo: https://github.com/genecell/COSG
+    docs: https://piaso.org/tutorials/cosg-markers/
     language: [python]
     pypi: cosg
-    import: cosg                             # cosg.cosg(...)
-    version_last_tested: "1.0.4"
+    conda: "bioconda::cosg (lags PyPI — 1.1.3 at last check; prefer pip)"
+    import: cosg                             # cosg.cosg(...) — polymorphic: AnnData | .cytome path | open CytomeDataset
+    version_last_tested: "1.2.0"
     license: BSD-3-Clause
     install: "pip install cosg"
+    extras: {gpu: "pip install 'cosg[gpu]'  # CuPy, device='gpu'|'auto'", cytome: "pip install 'cosg[cytome]'  # streaming path; already satisfied if piaso-tools is installed"}
+    depends_on: []                           # scanpy is NOT required since 1.1.0
     re_exported_through_piaso: false         # PIASO calls cosg.cosg internally, not exposed as piaso.cosg
     counterpart: cosgr                        # R implementation — SEE divergence rules below
+    accepts: [AnnData, cytome]
     citation_id: cosg_bib_2022
 
   - id: cosgr
+    name: COSGR
+    role: "COSG for Seurat / SingleCellExperiment objects in R"
     repo: https://github.com/genecell/COSGR
     language: [r]
-    cran: null                               # NOT on CRAN
+    cran: null                               # NOT on CRAN; binaries on r-universe + conda-forge
     import: "library(COSG)"                  # cosg(...)
     version_last_tested: "1.0.0"
     license: BSD-3-Clause
-    install: 'remotes::install_github("genecell/COSGR")'
+    install: 'install.packages("COSG", repos = "https://genecell.r-universe.dev")'
+    install_alternatives:
+      - 'conda install -c conda-forge r-cosg'
+      - 'remotes::install_github("genecell/COSGR")'
     object_model: [Seurat, SingleCellExperiment]
     counterpart: cosg                         # Python implementation
     citation_id: cosg_bib_2022
 
-  - id: laris
-    repo: https://github.com/genecell/LARIS
+  - id: cytome
+    name: cytome
+    role: "single-file SQLite .cytome store; the streaming backend every other component reads/writes (matrices, cells/genes tables, embeddings, graphs, fragments, tissue images, provenance)"
+    repo: https://github.com/genecell/cytome
+    docs: https://piaso.org/tutorials/cytome-basics/
+    format_spec: https://github.com/genecell/cytome/blob/main/docs/FORMAT_SPEC.md
     language: [python]
+    pypi: cytome
+    import: cytome                           # cytome.open/create/from_anndata/from_h5ad/from_10x_h5/from_cellranger(_arc)/merge/to_anndata
+    version_last_tested: "0.3.1"
+    license: BSD-3-Clause
+    install: "pip install cytome"            # already installed with piaso-tools
+    extras: {anndata: "pip install 'cytome[anndata]'", full: "pip install 'cytome[full]'"}
+    depends_on: []                           # numpy/scipy/pandas/lz4 only; sqlite3 is stdlib
+    counterpart: cytome-r
+    cli: "cytome convert|info|merge|subset|downsample|export|validate|provenance|copy"
+    citation_id: cytome_repo                 # no paper yet — cite the repository
+
+  - id: cytome-r
+    name: cytome (R)
+    role: "native R reader / writer / streamer for .cytome -> SingleCellExperiment or Seurat; no Python dependency; not an analysis package"
+    repo: https://github.com/genecell/cytome-r
+    docs: https://piaso.org/tutorials/cytome-in-r/
+    language: [r]
+    cran: null                               # binaries on r-universe
+    import: "library(cytome)"                # read_cytome(), write_cytome(), cytome_stream(), read_cytome(delayed = TRUE)
+    version_last_tested: "0.1.0"
+    license: MIT
+    install: 'install.packages("cytome", repos = "https://genecell.r-universe.dev")'
+    install_alternatives:
+      - 'remotes::install_github("genecell/cytome-r")  # needs liblz4 / libzstd / zlib headers'
+    object_model: [SingleCellExperiment, Seurat]
+    counterpart: cytome
+    citation_id: cytome_repo
+
+  - id: laris
+    name: LARIS
+    role: "ligand-receptor interaction analysis in SPATIAL transcriptomics (per-cell scores, spatial specificity, sender-receiver cell-type scores, exact matched-gene p-values, cross-condition comparison)"
+    repo: https://github.com/genecell/LARIS
+    docs: https://github.com/genecell/LARIS/blob/master/tutorials/README.md
+    language: [python]                       # + bundled Rust kernels since 0.12.0 (NumPy fallback)
     pypi: laris
-    import: laris                            # laris.tl|la.tl, .pp, .pl, .datasets
-    version_last_tested: "0.9.3"
+    import: laris                            # laris.tl|la.tl, .pl, .datasets
+    version_last_tested: "0.13.0"
     license: BSD-3-Clause
     install: "pip install laris"
-    depends_on: [cosg]
-    bundled_data: CellChatDB (human 2951 / mouse 3105 LR pairs)
+    extras: {cytome: "pip install 'laris[cytome]'"}
+    depends_on: [cosg]                       # + scanpy (still a hard dep of laris)
+    bundled_data: "CellChatDB via laris.datasets.lrDatabase (human 2951 / mouse 3105 LR pairs) — same tables piaso.data.load_lr_database fetches"
+    accepts: [AnnData, cytome]
     citation_id: laris_biorxiv_2025
 
   - id: emergene
+    name: Emergene
+    role: "individual-cell differential transcriptomics across conditions"
     repo: https://github.com/genecell/Emergene
+    docs: https://genecell.github.io/Emergene/
     language: [python]
     pypi: emergene
     import: emergene                         # emergene.tl|eg.tl, .pp, .pl
     version_last_tested: "1.0.2"
     license: BSD-3-Clause
-    install: "pip install emergene"          # pins annoy<1.17.0 (BBKNN segfault guard)
+    install: "pip install emergene"          # pins annoy<1.17.0 (BBKNN segfault guard); pulls scanpy + bbknn
+    depends_on: []
+    accepts: [AnnData]
     citation_id: piaso_nature_2026           # Emergene has NO separate paper — cites Wu, Dai et al. Nature (2026)
 
+  - id: cytorete
+    name: cytorete
+    role: "cell-type-resolved gene regulatory network (regulon) inference on the PIASO stack; RNA regulon chain shipped, multiome/ATAC chains withheld"
+    repo: https://github.com/genecell/cytorete
+    docs: https://piaso.org/tutorials/cytorete-regulons/
+    language: [python]
+    pypi: cytorete
+    import: cytorete                         # cytorete.tl (inferRegulon, regulonActivity, regulonSpecificity), .pp, .pl, .data; camelCase + snake_case
+    version_last_tested: "0.1.1"
+    license: BSD-3-Clause
+    install: "pip install cytorete"          # pulls piaso-tools>=1.2.2, cosg, cytome
+    extras: {motif: "pip install 'cytorete[motif]'  # py2bit for .2bit genome extraction"}
+    depends_on: [piaso, cosg, cytome]        # one-directional: cytorete -> piaso-tools, never back
+    accepts: [AnnData, cytome]
+    needs_reference_data: "genome .2bit (piaso.data.fetch_2bit) + TSS BED (piaso.data.fetch_genome) + motif DB (piaso.data.fetch_jaspar / fetch_cisbp)"
+    citation_id: cytorete_repo               # no paper yet — cite the repository
+
   - id: piaso-data
+    name: PIASO-data
+    role: "tutorial datasets (Zenodo) + genome reference files; registry consumed by piaso.data"
     repo: https://github.com/genecell/PIASO-data
     language: [data]
-    version_last_tested: null
-    license: "CC BY 4.0 (per README; no LICENSE file present)"
-    contents: "genome refs (hg38/mm10, in-repo) + tutorial datasets (Zenodo 10.5281/zenodo.19699639)"
+    version_last_tested: "v0.9.0"
+    license: "CC BY 4.0 (tutorial datasets, per README; genome files derive from UCSC/ENCODE); no LICENSE file present"
+    zenodo_concept_doi: 10.5281/zenodo.19699638      # always resolves to the latest record
+    zenodo_record: 22012620
+    registry: https://raw.githubusercontent.com/genecell/PIASO-data/master/datasets.json
+    contents: "genome refs (hg38/mm10, in-repo) + 9 tutorial files (h5ad / 10x h5 / csv) + 5 .cytome atlases (192 MB - 25.7 GB)"
     smallest_fixtures:
-      markerdb_blocks: piaso_markerdb_allen_immune   # 117 KB CSV
-      anndata_blocks: e18_v3_nuclei                  # ~20 MB 10x h5, ~5000 cells
+      markerdb_blocks: piaso_markerdb_allen_immune   # 115 KB CSV
+      anndata_blocks: e18_v3_nuclei                  # 19.3 MB 10x h5, ~5000 cells
+    spatial_fixture_used_in_tests: "LARIS tonsil (Slide-tags, Zenodo 10.5281/zenodo.19981287, adata_tonsil.h5ad 241 MB) — not part of PIASO-data"
 
 # Repos that exist in the org but are NOT documented ecosystem members yet.
-# Re-check before each release; promote if they ship docs.
-watch_list: [ROEN, SCDC, Tahoeformer]
+# Re-check before each release; promote if they ship docs. PICCO / cytomera / CISG and the
+# scATAC surface of piaso (runATACLazy, picco, TF-IDF) are listed as "coming" on piaso.org
+# and are deliberately NOT documented here.
+watch_list: [PICCO, cytomera, CISG, ROEN, SCDC, Tahoeformer]
 
 # ---------------------------------------------------------------------------
 # Trigger vocabulary. Every component name is a FIRST-CLASS standalone trigger
-# (users say "find markers with COSG" and never mention PIASO). SCALAR is a PIASO
-# function but is a first-class trigger term in its own right.
+# (users say "find markers with COSG" and never mention PIASO). SCALAR, PIASOscore,
+# INFOG and GDR are PIASO functions but first-class trigger terms in their own right.
 # ---------------------------------------------------------------------------
 triggers:
-  component_names: [PIASO, COSG, COSGR, LARIS, Emergene, SCALAR, PIASOmarkerDB]
+  component_names: [PIASO, COSG, COSGR, LARIS, Emergene, SCALAR, PIASOmarkerDB, cytome, cytorete, PIASOscore, INFOG, GDR]
   task_phrasings:
     - marker gene identification / find markers for clusters
-    - ligand-receptor analysis / cell-cell communication
-    - gene-set scoring / gene-set enrichment / score a gene set
-    - cell type annotation / label transfer / predict cell types
-    - marker-gene-guided dimensionality reduction (GDR)
-    - INFOG normalization
+    - ligand-receptor analysis / cell-cell communication (single-cell or spatial)
+    - gene-set / pathway scoring
+    - cell type annotation / label transfer
+    - marker-gene-guided DR (GDR) / reference projection
+    - INFOG normalization / QC / doublets
     - batch integration across samples
     - differential expression across conditions
-  file_formats: [".h5ad", "AnnData", "Seurat", ".rds", "Visium", "spatial"]
+    - gene regulatory networks / regulons / TF activity
+    - streaming / out-of-core analysis of large data
+    - AnnData / Seurat / SCE <-> .cytome conversion
+    - spatial clustering with a tissue-image overlay
+  file_formats: [".h5ad", "AnnData", "Seurat", ".rds", ".cytome", "Visium", "Visium HD", "Xenium", "MERFISH", "Stereo-seq", "spatial"]
 
 # ---------------------------------------------------------------------------
 # Cross-component decision rules — the hub's reason to exist. No single repo
@@ -128,26 +235,69 @@ triggers:
 # ---------------------------------------------------------------------------
 decision_rules:
   - id: lr_scalar_vs_laris
-    question: "analyze ligand-receptor interactions"
+    question: "analyze ligand-receptor interactions / cell-cell communication"
     rule: >-
-      Spatial coordinates present (.obsm['spatial']/['X_spatial']; Visium/MERFISH/Xenium)
-      -> LARIS (runLARIS). Dissociated single-cell, no coordinates -> PIASO
-      piaso.tl.runSCALAR. SCALAR needs a user-supplied LR-pair list + specificity matrix
-      (no bundled DB); LARIS bundles CellChatDB.
+      Spatial coordinates present (.obsm['spatial'] / ['X_spatial']; Visium, Visium HD,
+      Xenium, MERFISH, Stereo-seq, Slide-tags) -> LARIS (laris.tl.prepareLRInteraction ->
+      prepareLRBackground -> runLARIS). Dissociated single-cell, no coordinates -> PIASO SCALAR
+      (piaso.tl.specificity_matrix -> piaso.tl.runSCALAR). Both take the SAME CellChatDB
+      (piaso.data.load_lr_database / laris.datasets.lrDatabase). Natural pairing: SCALAR on a
+      dissociated reference to find which interactions exist, LARIS on the spatial section to
+      ask where they happen. Before either on a targeted panel: count LR pairs with BOTH genes
+      measured (a 313-gene Xenium panel has 11/2951).
   - id: cosg_python_vs_r
     question: "use COSG to find markers"
     rule: >-
-      Infer language from objects in session: AnnData / .h5ad / scanpy -> Python `cosg`;
-      Seurat object / .rds / library(Seurat) -> R COSGR. Ask when ambiguous. NOTE default
-      flips: remove_lowly_expressed False(Py)/TRUE(R); n_genes 50(Py)/100(R).
+      Infer language from objects in session: AnnData / .h5ad / .cytome / scanpy -> Python
+      `cosg.cosg` (writes adata.uns[key]; on a .cytome path it RETURNS a dict); Seurat object /
+      .rds / library(Seurat) -> R COSGR `cosg()` (uses Idents(), returns list(names, scores)).
+      Ask when ambiguous. Defaults: remove_lowly_expressed is TRUE in both since cosg 1.1.0;
+      n_genes_user still differs (50 Py / 100 R). P-values, GPU, batch_key and cytome
+      streaming are Python-only.
   - id: emergene_conditions
     question: "differential expression across conditions"
-    rule: ">=2 conditions -> runEMERGENE (needs condition_key); single condition -> runMarkG."
+    rule: >-
+      >=2 conditions -> emergene.tl.runEMERGENE (needs condition_key; best with use_rep='X_gdr',
+      layer='infog' from a PIASO run); single condition -> emergene.tl.runMarkG.
+  - id: anndata_vs_cytome
+    question: "should this analysis run on an AnnData or a .cytome?"
+    rule: >-
+      Fits in RAM, single sample, scanpy interop wanted -> AnnData. More than ~100k cells,
+      several samples in one object, ATAC fragments, a tissue image + ROI queries, results that
+      should persist on disk, or an R collaborator -> .cytome (cytome.from_anndata /
+      from_h5ad(backed=True) / from_10x_h5 / merge). Same function calls either way: every
+      piaso / cosg / laris / cytorete function takes data= AnnData | open Dataset | path and
+      streams in batch_size chunks, writing results back onto the file.
+  - id: annotation_route
+    question: "annotate cell types"
+    rule: >-
+      Have marker lists (COSG output or PIASOmarkerDB getMarkers(as_dict=True)) ->
+      piaso.tl.predictCellTypeByMarker. Have a labelled reference and want the query in the
+      reference's coordinates -> runGDR(save_reference=True) + piaso.tl.projectGDR, then
+      predictCellTypeByMarker(use_rep='X_gdr_proj'); or predictCellTypeByGDR (joint embedding,
+      needs piaso-tools>=1.2.3). Have only a gene list -> piaso.tl.analyzeMarkers (PIASOmarkerDB,
+      live API). Have nothing -> COSG markers per cluster -> analyzeMarkers.
+  - id: markers_vs_regulons
+    question: "what defines / drives this cell type"
+    rule: >-
+      "Which genes define this type" -> COSG (cosg.cosg). "Which transcription factors drive
+      it" -> cytorete (cytorete.inferRegulon; needs genome .2bit + TSS BED + motif DB via
+      piaso.data; RNA-only chain today). The piaso.tl.inferRegulon / regulonActivity names are
+      thin forwarders to cytorete — new code should `import cytorete`.
+  - id: r_user
+    question: "an R / Seurat user wants the ecosystem"
+    rule: >-
+      Markers -> COSGR (r-universe / conda-forge r-cosg). File IO and streaming -> cytome (R,
+      r-universe): read_cytome(as='Seurat'|'SingleCellExperiment'), write_cytome(), delayed=TRUE.
+      Everything else (INFOG, GDR, scoring, SCALAR, LARIS, cytorete) is Python — build the
+      .cytome in R with write_cytome(), analyse in Python, read the results back with
+      read_cytome(). PIASOmarkerDB from R: the piaso-mcp server (query_marker_db) or the REST
+      API at https://piaso.org/piasomarkerdb/api/v1/.
 
 # ---------------------------------------------------------------------------
 # Per-component citations — VERBATIM from each repo README. One per component,
-# never a blanket citation. (COSG/COSGR READMEs omit the 23(2) volume/issue;
-# the canonical form below restores it — flagged for upstream README fix.)
+# never a blanket citation. (COSG READMEs omit the 23(2) volume/issue; the canonical
+# form below restores it. cytome / cytorete have no paper yet — cite the repository.)
 # ---------------------------------------------------------------------------
 citations:
   piaso_nature_2026:
@@ -156,13 +306,14 @@ citations:
       interneuron subtypes. Nature (2026).
     doi: 10.1038/s41586-025-09996-8
     applies_to: [piaso, emergene]
+    note: "An interneuron-development study that introduces PIASO; cite it by name, not as 'the PIASO paper'."
   cosg_bib_2022:
     text: >-
       Dai M, Pei X, Wang X-J. Accurate and fast cell marker gene identification
       with COSG. Briefings in Bioinformatics 23(2):bbab579 (2022).
     doi: 10.1093/bib/bbab579
     applies_to: [cosg, cosgr]
-    note: "Both COSG READMEs omit the 23(2) volume/issue; restored here."
+    note: "Both COSG READMEs omit the 23(2) volume/issue; restored here. (Not bbac157.)"
   laris_biorxiv_2025:
     text: >-
       M. Dai, T. Török, D. Sun, et al. LARIS enables accurate and efficient ligand
@@ -170,20 +321,98 @@ citations:
     doi: 10.1101/2025.11.26.690796
     applies_to: [laris]
     note: "Preprint — a separate publication from the Nature (2026) paper."
+  cytome_repo:
+    text: "cytome — a single-file format for single-cell multi-omics. https://github.com/genecell/cytome (Min Dai, The Fishell Laboratory). No paper yet."
+    applies_to: [cytome, cytome-r]
+  cytorete_repo:
+    text: "cytorete — cell-type-resolved inference of gene regulatory networks. https://github.com/genecell/cytorete (Min Dai, The Fishell Laboratory). No paper yet."
+    applies_to: [cytorete]
 
 # ---------------------------------------------------------------------------
-# Ecosystem-wide gotchas (carried into every install line).
+# Ecosystem-wide gotchas (carried into every install line / block). Full text in gotchas.md.
 # ---------------------------------------------------------------------------
 gotchas:
-  - id: piaso_matplotlib_39
+  - id: matplotlib_pin_obsolete
     text: >-
-      PIASO 1.1.0 fails to `import` under matplotlib >= 3.9 (piaso/plotting/color.py
-      calls the removed matplotlib.cm.get_cmap at import time). Pin "matplotlib<3.9"
-      in every PIASO install line and code block until fixed upstream.
+      Do NOT pin matplotlib<3.9 for piaso-tools >= 1.2.0 / cosg >= 1.1.2 (verified: import on
+      matplotlib 3.11.1). Only piaso-tools <= 1.1.0 needed the pin.
+  - id: raw_counts_in
+    text: >-
+      piaso.tl.infog and COSG p-values (calculate_pvalues=True) need INTEGER raw UMI counts;
+      infog refuses non-integer input and names the layer to pass. Datasets from the registry
+      may keep counts in a layer (check piaso.data.dataset_info(name)['counts_layer']).
+  - id: getmarkers_as_dict_tuple
+    text: "piaso.tl.getMarkers(..., as_dict=True) returns a TUPLE (DataFrame, dict) — unpack two names."
+  - id: deprecated_names
+    text: >-
+      runSVDLazy -> piaso.tl.infog + runSVD(layer='infog') (or infog_svd); runLARIS(adata=) ->
+      runLARIS(lr_data, data); runLARIS n_permutations/n_repeats are legacy — use
+      prepareLRBackground + background=.
+  - id: cosg_on_cytome_returns
+    text: >-
+      cosg.cosg on a .cytome path / Dataset RETURNS a dict (names, scores, groups_order, +pvals)
+      and takes no key_added; layer='auto' normalizes stored raw counts on the fly, a named
+      layer is read as-is.
+  - id: cytome_counts_invariant
+    text: >-
+      cytome >= 0.3.0: '{modality}_counts' holds raw integers or does not exist; a non-integer
+      adata.X is stored as '{modality}_data'. obsm['X_umap'] becomes embedding 'RNA_umap'.
   - id: emergene_annoy
-    text: "emergene pins annoy<1.17.0; stitchSpace warns annoy>=1.17 causes a BBKNN segfault."
+    text: "emergene pins annoy<1.17.0; PIASO stitchSpace warns annoy>=1.17 causes a BBKNN segfault."
   - id: markerdb_is_remote_api
     text: >-
       PIASOmarkerDB is a REMOTE REST API client (https://piaso.org/piasomarkerdb/api/v1/),
-      NOT wheel-bundled data. Any MCP tool must proxy the live API or obtain a raw snapshot
-      + redistribution license from the maintainers first.
+      NOT wheel-bundled data. Needs network. The MCP server proxies the live API.
+
+# ---------------------------------------------------------------------------
+# piaso.org tutorial index (executed against the real datasets on the machine that builds
+# the site). Consumed by the MCP list_tutorials tool and by llms.txt. URLs are relative to
+# hub.tutorials. Keep in sync with piaso.org/tutorials/ on each release.
+# ---------------------------------------------------------------------------
+tutorials:
+  - {slug: san2-end-to-end-anndata, title: "Human PBMC scRNA-seq end to end (AnnData)", topic: scRNA-seq, components: [piaso, cosg], covers: "counts -> two-tailed QC -> doublets -> clusters -> artefact clusters -> cell types; the place to start"}
+  - {slug: san2-end-to-end-cytome, title: "Human PBMC scRNA-seq end to end (cytome)", topic: scRNA-seq, components: [piaso, cosg, cytome], covers: "the same analysis streamed from disk; filter writes a new file; annotation written back to the file"}
+  - {slug: rna-end-to-end-anndata, title: "Mouse brain scRNA-seq end to end (AnnData)", topic: scRNA-seq, components: [piaso, cosg], covers: "Cell Ranger counts -> QC -> doublets -> clusters -> two annotation routes (PIASOmarkerDB vs reference) -> GDR"}
+  - {slug: rna-end-to-end-cytome, title: "Mouse brain scRNA-seq end to end (cytome)", topic: scRNA-seq, components: [piaso, cosg, cytome], covers: "the same mouse analysis, streamed"}
+  - {slug: rna-multi-sample, title: "Multiple samples: QC, embedding and annotation", topic: scRNA-seq, components: [piaso, cosg], covers: "per-library doublets (scrublet library_key), per-sample QC, GDR with batch_key vs SVD, silhouette check, runHarmony when a batch effect is real"}
+  - {slug: rna-multi-sample-mouse, title: "Two preparations of one tissue: cells vs nuclei", topic: scRNA-seq, components: [piaso, cosg], covers: "a real batch effect, measured, and where it comes from"}
+  - {slug: rna-multi-sample-cytome, title: "Multiple samples in one cytome", topic: scRNA-seq, components: [piaso, cytome], covers: "cytome.merge, then the multi-sample analysis streamed from one file"}
+  - {slug: gdr, title: "Marker-gene-guided dimensionality reduction (GDR)", topic: methods, components: [piaso], covers: "runGDR / runGDRParallel with batch_key and groupby=None; batch mixing vs cell-type purity measured"}
+  - {slug: gdr-predict-cell-type, title: "Cell type prediction with GDR", topic: methods, components: [piaso], covers: "predictCellTypeByGDR: label transfer from an annotated reference"}
+  - {slug: project-gdr, title: "projectGDR: putting new data into a reference's space", topic: methods, components: [piaso], covers: "runGDR(save_reference=True) then projectGDR(query, reference); mode='reference' vs 'self'; novelty flags"}
+  - {slug: leiden-local, title: "Local Leiden clustering", topic: methods, components: [piaso], covers: "piaso.tl.leiden_local: re-cluster inside selected groups"}
+  - {slug: gdr-at-scale, title: "GDR at scale: 200,000 cells in 17 minutes", topic: methods, components: [piaso, cytome], covers: "the whole pipeline on a .cytome path; memory/time knobs"}
+  - {slug: gdr-vs-svd-1p5m, title: "GDR and SVD on 1.5 million cells", topic: methods, components: [piaso, cytome], covers: "runtime, peak memory and separation on a 1.5M-nucleus atlas"}
+  - {slug: gdr-developmental, title: "GDR on developmental data", topic: methods, components: [piaso], covers: "stages rather than terminal types"}
+  - {slug: gdr-applications, title: "GDR beyond transcriptomics", topic: methods, components: [piaso], covers: "images as expression matrices"}
+  - {slug: emergene, title: "Emergene: differential analysis at the level of the cell", topic: methods, components: [emergene, piaso], covers: "runEMERGENE downstream of PIASO (use_rep='X_gdr', layer='infog'); per-condition vs all-in-one"}
+  - {slug: cosg-markers, title: "COSG: marker genes and their significance", topic: marker-genes, components: [cosg, piaso], covers: "mu / expressed_pct / n_genes_user; calculate_pvalues columns; plotMarkerDotplot / plotMarkerDendrogram; IQR normalisation across cell types; the double-dipping caveat"}
+  - {slug: cosg-cytome, title: "COSG on a cytome", topic: marker-genes, components: [cosg, cytome], covers: "run_cosg_cytome / cosg.cosg(ds); output_format shapes; what layer= means on a file"}
+  - {slug: cosg-batch, title: "COSG across batches", topic: marker-genes, components: [cosg], covers: "batch_key scores per batch and averages; batch_cell_number_threshold"}
+  - {slug: cosg-gpu, title: "COSG on the GPU", topic: marker-genes, components: [cosg], covers: "device='gpu'; measured speed-ups by matrix size"}
+  - {slug: cosg-spatial, title: "COSG on spatial transcriptomics", topic: marker-genes, components: [cosg, piaso], covers: "organ markers on a whole embryo section, plotted in tissue space"}
+  - {slug: marker-cell-type-prediction, title: "Marker-based cell type prediction", topic: annotation, components: [piaso, cosg], covers: "predictCellTypeByMarker from COSG markers (mu=10) on a GDR embedding; 95.4% held-out accuracy; the same call against PIASOmarkerDB"}
+  - {slug: markerdb-api, title: "PIASOmarkerDB API client", topic: annotation, components: [piaso], covers: "getMarkers by study/gene/cell_type/species; as_dict=True returns a tuple; analyzeMarkers from a gene list to cell types"}
+  - {slug: gene-set-scoring, title: "Gene set scoring (PIASOscore)", topic: gene-sets, components: [piaso, cosg], covers: "piaso.tl.score with compute_pvalues; why matched controls; a whole pathway database at once; COSG on the score matrix; on a cytome"}
+  - {slug: kegg-drug-targets, title: "KEGG and drug-target gene sets", topic: gene-sets, components: [piaso, cosg], covers: "320 pathways + 659 drug target sets scored per cell, then which cell type each belongs to"}
+  - {slug: motif-analysis, title: "Motif analysis", topic: gene-sets, components: [piaso], covers: "genome -> promoters -> PWM scan (piaso.pp.scan_motifs) -> enrichment; the background choice"}
+  - {slug: spatial-xenium, title: "Xenium with tissue-image overlay", topic: spatial, components: [piaso, cytome, cosg], covers: "read_10x_h5 + cells.csv -> obsm['spatial'] -> infog/SVD/leiden -> cytome.from_anndata + add_spatial_image -> plotEmbedding(image=True) -> cells_in_region ROI"}
+  - {slug: spatial-xenium-cytome, title: "Xenium into a cytome directly", topic: spatial, components: [cytome, piaso], covers: "cytome.from_10x_h5 -> add_embedding('spatial') + set_spatial_coords -> streamed clustering -> image overlay"}
+  - {slug: xenium-prime-brain, title: "Xenium Prime 5K: mouse brain end to end", topic: spatial, components: [piaso, cosg, cytome], covers: "63,173 cells x 5,006 genes from the raw bundle to annotated clusters"}
+  - {slug: atera-wta, title: "Atera WTA: near-whole-transcriptome in situ", topic: spatial, components: [piaso, cosg, cytome], covers: "18,028 targets in situ"}
+  - {slug: xenium-downstream, title: "Downstream in situ: pathways, ligand-receptor and regulons", topic: spatial, components: [piaso, laris, cytorete], covers: "LR-pair coverage check first; KEGG per cell; LARIS on a section (plotCCCSpatial); cytorete.inferRegulon on RNA-only spatial data"}
+  - {slug: spatial-merfish, title: "MERFISH sections in one cytome", topic: spatial, components: [cytome, piaso], covers: "several sections in one file, plot_embeddings_split by section"}
+  - {slug: spatial-stereoseq, title: "Stereo-seq whole embryo", topic: spatial, components: [cytome, piaso], covers: "bin-resolution section; rotateSpatialCoordinates on a cytome; zoom by coordinates (cell_mask)"}
+  - {slug: gdr-mosta-allstage, title: "GDR on spatial transcriptomics: eight embryonic stages", topic: spatial, components: [piaso, cytome], covers: "520,815 bins in one embedding"}
+  - {slug: cytorete-regulons, title: "cytorete: RNA regulon inference", topic: grn, components: [cytorete, piaso, cytome], covers: "fetch_jaspar/fetch_2bit/fetch_genome -> inferRegulon(ds, 'hg38', 'Subclass', tf_list=) -> X_regulon(+_pval) -> regulonActivity / regulonSpecificity / four plots"}
+  - {slug: cytorete-spatial-stereoseq, title: "cytorete on spatial data", topic: grn, components: [cytorete, cytome, piaso], covers: "regulons across a whole embryo section, compared against published regulons"}
+  - {slug: cytorete-regulon-dynamics, title: "Regulon dynamics across development", topic: grn, components: [cytorete, cytome], covers: "half a million bins, eight stages"}
+  - {slug: scalar, title: "SCALAR: ligand-receptor interaction analysis", topic: cell-cell-interaction, components: [piaso, cosg], covers: "load_lr_database -> COSG all-gene specificity matrix -> runSCALAR (exact matched-gene null, 1.67M interactions) -> plotLigandReceptorInteraction / Lollipop; split by CellChatDB annotation"}
+  - {slug: laris, title: "LARIS: ligand-receptor interactions in spatial data", topic: cell-cell-interaction, components: [laris], covers: "SCALAR vs LARIS decision; links the LARIS repo tutorials 01-08"}
+  - {slug: plotting, title: "Plotting", topic: plotting-data, components: [piaso], covers: "piaso.pl end to end: embedding, dotplot, violin, scatter, split embeddings"}
+  - {slug: color-palettes, title: "Colour palettes", topic: plotting-data, components: [piaso], covers: "built-in palettes (piaso.pl.color.*) and custom ones"}
+  - {slug: datasets-and-references, title: "Datasets and genome references", topic: plotting-data, components: [piaso], covers: "piaso.data.list_datasets / load_dataset / fetch_dataset / dataset_info; genomes; caching and data_dir"}
+  - {slug: cytome-basics, title: "cytome basics", topic: plotting-data, components: [cytome, piaso], covers: "create / from_anndata / from_h5ad(backed=True) / from_cellranger; cells.query; RNA.counts slicing and iter_rows; embeddings; provenance; set_categories"}
+  - {slug: cytome-conversion, title: "Converting: AnnData, Seurat, SingleCellExperiment", topic: plotting-data, components: [cytome, cytome-r], covers: "the six conversions; what travels (graphs by default, layers opt-in, feature annotations beyond id/symbol do not)"}
+  - {slug: cytome-in-r, title: "cytome in R", topic: plotting-data, components: [cytome-r], covers: "read_cytome(as=), write_cytome, delayed=TRUE out-of-core, cytome_stream"}
+  - {slug: agents-and-tooling, title: "Agents and project tooling", topic: plotting-data, components: [], covers: "PIASO-for-agents, stato, PlanDrop — why an agent should read the current API"}

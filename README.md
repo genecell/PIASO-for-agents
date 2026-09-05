@@ -8,55 +8,80 @@ Maintained by **[The Fishell Laboratory](https://fishelllab.hms.harvard.edu)** (
 Medical School / Broad Institute). Every agent-specific format (Claude skill, Cursor rules, `AGENTS.md`,
 `llms.txt`, MCP server) is a **generated artifact** built from `canonical/` — never a
 hand-maintained copy. A CI drift check (`python build.py --check`) fails the build if any
-`dist/` artifact is out of sync with `canonical/`, and the code-block test suite re-runs on
-every component release, so the guidance cannot silently rot.
+`dist/` artifact is out of sync with `canonical/`, and the code-block test suite runs every
+canonical block against the **pinned component versions** on every push, nightly, and on
+component releases, so the guidance cannot silently rot.
+
+**Hub v0.2.0 · piaso-mcp 0.1.0 — tested against piaso-tools 1.2.3 · cosg 1.2.0 · cytome 0.3.1 ·
+laris 0.13.0 · emergene 1.0.2 · cytorete 0.1.1 · COSGR 1.0.0 · cytome (R) 0.1.0 (2026-09-04).**
 
 ## The ecosystem
 
-Independently-installable packages under [github.com/genecell](https://github.com/genecell):
+Independently-installable packages under [github.com/genecell](https://github.com/genecell), in
+four layers. Dependencies run one way (`cytorete → piaso-tools → cosg + cytome`; `laris → cosg`),
+and `pip install piaso-tools` already brings COSG and cytome.
 
-| Component | Package | Language | Role |
-|---|---|---|---|
-| [PIASO](https://github.com/genecell/PIASO) | `piaso-tools` | Python (+Rust) | Umbrella single-cell toolkit — see the capability table below |
-| [COSG](https://github.com/genecell/COSG) | `cosg` | Python | Fast, specific marker-gene identification |
-| [COSGR](https://github.com/genecell/COSGR) | `COSG` | R | COSG for Seurat / SingleCellExperiment |
-| [LARIS](https://github.com/genecell/LARIS) | `laris` | Python | Ligand–receptor interaction in spatial transcriptomics |
-| [Emergene](https://github.com/genecell/Emergene) | `emergene` | Python | Individual-cell differential expression across conditions |
-| [PIASO-data](https://github.com/genecell/PIASO-data) | — | data | Genome references + tutorial datasets |
+| Layer | Component | Package | Language | Role |
+|---|---|---|---|---|
+| Analysis | [PIASO](https://github.com/genecell/PIASO) | `piaso-tools` | Python + Rust | Self-contained pipeline — reading 10x data, QC, doublets, **INFOG**, SVD / **GDR**, Leiden / UMAP, **PIASOscore**, annotation, **SCALAR**, PIASOmarkerDB client, plotting, `piaso.data`. **No scanpy required.** |
+| Storage | [cytome](https://github.com/genecell/cytome) | `cytome` | Python | Single-file SQLite `.cytome`: matrices, SQL-queryable cell/gene tables, embeddings, graphs, fragments, tissue images, provenance — what every component streams from |
+| | [cytome (R)](https://github.com/genecell/cytome-r) | `cytome` (r-universe) | R | Read / write / stream the same file into Seurat or SingleCellExperiment, no Python |
+| Methods | [COSG](https://github.com/genecell/COSG) | `cosg` | Python | Marker genes by cosine specificity — analytic p-values, GPU, batch-aware, streams from cytome |
+| | [COSGR](https://github.com/genecell/COSGR) | `COSG` (r-universe / conda-forge) | R | COSG for Seurat / SingleCellExperiment |
+| | [LARIS](https://github.com/genecell/LARIS) | `laris` | Python | Ligand–receptor interaction in **spatial** transcriptomics; exact p-values; cross-condition comparison |
+| | [Emergene](https://github.com/genecell/Emergene) | `emergene` | Python | Individual-cell differential expression across conditions |
+| | [cytorete](https://github.com/genecell/cytorete) | `cytorete` | Python | Cell-type-resolved gene regulatory networks (regulons) on the PIASO stack |
+| Data | [PIASO-data](https://github.com/genecell/PIASO-data) | — | data | Tutorial datasets (Zenodo, incl. five `.cytome` atlases) + genome references; registry read by `piaso.data` |
 
-Each component is **independently installable** — you can `pip install cosg` (or `laris`, or
-`emergene`) on its own, so a COSG-only user is a first-class citizen. Note the dependency
-direction, though: installing `piaso-tools` (and `laris`) also pulls in `cosg`, so a PIASO
-user always has COSG available. The hub's unique value is documenting how the components
-**compose**, and the cross-component choices no single repo can make (e.g. SCALAR vs LARIS for
-ligand–receptor: spatial data → LARIS, dissociated single-cell → SCALAR).
+Each component is **independently installable** — a COSG-only, cytome-only or LARIS-only user is
+a first-class citizen, and every `canonical/components/*.md` assumes nothing else is installed.
+The hub's unique value is documenting how the components **compose**, and the cross-component
+choices no single repo can make: **SCALAR vs LARIS** (dissociated vs spatial ligand–receptor —
+same CellChatDB either way), **AnnData vs `.cytome`** (in memory vs streamed — same function
+calls), **COSG vs cytorete** (marker genes vs the TFs that drive them), **Python vs R** (COSG →
+COSGR, cytome → cytome (R); everything else via a `.cytome` handoff), and **which annotation
+route** (marker sets, reference projection, joint embedding, or a gene list against PIASOmarkerDB).
 
 ### Inside `piaso-tools`
 
-The `piaso` package is itself a toolkit. Full references live in
-[`canonical/components/piaso.md`](canonical/components/piaso.md). Grouped by what is a
-PIASO-introduced method vs. a convenience wrapper around a standard step:
+Full reference: [`canonical/components/piaso.md`](canonical/components/piaso.md). Every function
+takes `data=` as an AnnData, an open cytome Dataset or a `.cytome` path.
 
 **Methods introduced by PIASO**
 
 | Capability | Entry point | What it does |
 |---|---|---|
-| INFOG normalization | `piaso.tl.infog` | Information-content normalization of raw UMI counts + HVG selection |
-| GDR (marker-gene-guided DR) | `piaso.tl.runGDR` / `runGDRParallel` | Embedding whose axes are per-cluster COSG-marker scores; also does batch integration |
-| Gene-set scoring | `piaso.tl.score` | Optimized expression-matched-control gene-set enrichment scoring — Rust-accelerated |
-| Cell-type prediction | `piaso.tl.predictCellTypeByMarker` / `predictCellTypeByGDR` | Marker-based and reference-based annotation |
-| SCALAR (single-cell LR) | `piaso.tl.runSCALAR` | Cell-type-resolved ligand–receptor inference for dissociated scRNA-seq |
+| INFOG normalization | `piaso.tl.infog` | Information-content normalization of raw UMI counts + informative-gene selection |
+| GDR (marker-gene-guided DR) | `piaso.tl.runGDR` / `runGDRParallel` / `projectGDR` | Embedding whose axes are per-group COSG-marker scores; integrates batches by identity; frozen reference spaces |
+| Gene-set scoring (PIASOscore) | `piaso.tl.score` | Expression-matched-control scoring with per-cell p-values; whole pathway databases in one Rust matmul |
+| Cell-type prediction | `piaso.tl.predictCellTypeByMarker` / `predictCellTypeByGDR` | Marker-set and reference-based annotation |
+| SCALAR (single-cell LR) | `piaso.tl.specificity_matrix` + `runSCALAR` | Cell-type-resolved ligand–receptor inference for dissociated data, CellChatDB via `piaso.data.load_lr_database` |
 | Marker-guided integration | `piaso.tl.stitchSpace` | Batch correction of an embedding via COSG-marker graph pruning |
-| PIASOmarkerDB | `piaso.tl.queryPIASOmarkerDB` / `getMarkers` / `analyzeMarkers` | Client for the curated PIASO marker-gene database (live API) |
+| PIASOmarkerDB | `piaso.tl.getMarkers` / `analyzeMarkers` | Client for the curated marker database (36 studies, live API) |
+| Motif scanning | `piaso.pp.scan_motifs` + `piaso.data` motif/genome loaders | The Rust PWM engine cytorete builds on |
 
-**Utilities & standard building blocks**
+**Pipeline building blocks (scanpy-free)**
 
-| Capability | Entry point | What it does |
-|---|---|---|
-| SVD embedding | `piaso.tl.runSVDLazy` / `runSVD` | Convenience wrapper around truncated SVD with INFOG-aware HVG (SVD itself is a standard method) |
-| Local sub-clustering | `piaso.tl.leiden_local` | Re-cluster selected groups locally |
-| Preprocessing (`piaso.pp`) | `piaso.pp.table` / `getCrossCategories` / `rotateSpatialCoordinates` | Table/cross-tab helpers and spatial-coordinate rotation |
-| Plotting (`piaso.pl`) | `piaso.pl.plot_embeddings_split` / `plot_features_violin` / `plotConfusionMatrix` / LR plots | Embedding, violin, confusion-matrix, and ligand–receptor plots |
+| Capability | Entry point |
+|---|---|
+| Read 10x / Cell Ranger | `piaso.pp.read_10x_h5`, `read_10x`, `importCellRanger` (→ cytome) |
+| QC, doublets, filtering | `piaso.pp.calculateCellMetrics`, `scrublet`, `filter_cells`, `calculateGroupMetrics` |
+| Embedding, graph, clusters, UMAP | `piaso.tl.runSVD`, `neighbors`, `leiden`, `umap`, `leiden_local`, `runHarmony` |
+| Datasets, genomes, motif DBs, CellChatDB | `piaso.data.load_dataset`, `fetch_genome`, `fetch_2bit`, `fetch_jaspar`, `load_lr_database` |
+| Plotting | `piaso.pl.embedding`, `dotplot`, `violin`, `scatter`, `sankey`, `stackedBarplot`, `plot_embeddings_split` (+ tissue-image overlays on cytomes), `piaso.settings.set_figure_params` |
+
+## What an agent gets
+
+- `canonical/overview.md` — the router: task → component table and the seven decision rules.
+- `canonical/components/` — self-sufficient references for PIASO, COSG (+ COSGR), cytome (+ R),
+  LARIS, Emergene, cytorete, with executed code blocks and the data-object contract of every call.
+- `canonical/workflows/` — end-to-end scRNA-seq (scanpy-free), streaming on a `.cytome`,
+  marker-based annotation + reference projection, PIASOmarkerDB annotation, ligand–receptor
+  (SCALAR and LARIS), spatial transcriptomics, gene regulatory networks.
+- `canonical/gotchas.md` (layer contracts, deprecated names, the `as_dict` tuple, species-cased
+  prefixes), `canonical/data.md` (registry, fixtures), and the **piaso.org tutorial index**
+  (generated into every target) so the agent can point the user at the executed tutorial for
+  their platform.
 
 ## Install (per agent)
 
@@ -104,18 +129,20 @@ your project's `AGENTS.md` (or copy [`dist/agents/AGENTS.md`](dist/agents/AGENTS
 
 **llms.txt (any model with web access)** — point the tool at:
 ```
-https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/dist/llms/llms.txt
+https://piaso.org/llms.txt          # and https://piaso.org/llms-full.txt
 ```
-(and `llms-full.txt` alongside it). These can also be served from `https://piaso.org/llms.txt`.
+These are the hub's `dist/llms/piaso.org/` files (absolute links); the relative-link versions are
+at `dist/llms/`.
 
 ## MCP server
 
-`piaso-mcp` serves the PIASO ecosystem docs **plus** the live PIASOmarkerDB — no
-Python packages required. Tools: `search_docs`, `get_api`, `compare_implementations`,
-`resolve_install`, `list_datasets`, and the live DB proxies `query_marker_db`,
-`get_markers`, `list_studies`. It is a **local stdio** server (not a hosted remote endpoint),
-so it works in Claude Code / Cursor / VS Code / Windsurf / Zed / Codex / Cline, but **not** in
-the claude.ai web app — use the Skill upload there.
+`piaso-mcp` serves the PIASO ecosystem docs, the **piaso.org tutorial index**, the **PIASO-data
+registry** and the **live PIASOmarkerDB** — no Python packages required. Tools: `search_docs`,
+`get_api`, `compare_implementations`, `resolve_install`, `list_tutorials`, `version_matrix`,
+`check_versions` (PyPI vs tested versions), `list_datasets` / `get_dataset` (live registry), and
+the live DB proxies `query_marker_db`, `get_markers`, `list_studies`. It is a **local stdio**
+server (not a hosted remote endpoint), so it works in Claude Code / Cursor / VS Code / Windsurf /
+Zed / Codex / Cline, but **not** in the claude.ai web app — use the Skill upload there.
 
 ### Prerequisite (all clients): `uv`
 
@@ -233,19 +260,30 @@ it's the `uv`/PATH prerequisite above.
 ## Repository layout
 
 ```
-canonical/       # the ONLY hand-written content (agent-neutral markdown + meta.yaml)
+canonical/       # the ONLY hand-written content (agent-neutral markdown + meta.yaml, incl. the tutorial index)
 build.py         # canonical/ -> all targets (pure text transforms); --check is the CI drift guard
 dist/            # ALL GENERATED — never hand-edited (claude/ agents/ cursor/ copilot/ llms/ mcp/)
 mcp/             # piaso-mcp source (local stdio server; serves knowledge + public data only)
-tests/           # executes every canonical code block (Python + R) against PIASO-data fixtures
+tests/           # executes every canonical code block (Python + R) on the fixtures; heavy spatial/regulon runs nightly
 .claude-plugin/  # marketplace + plugin manifest (repo root, for `claude plugin marketplace add`)
-.github/         # sync-check + test CI (re-runs on component releases + nightly)
+.github/         # sync-check + test CI (re-runs on component releases + nightly) + PyPI / MCP-registry publish
 ```
+
+Related tooling (independent projects, listed on piaso.org's *Agents and project tooling* page):
+[stato](https://stato.hiniki.com) — structured expertise management for long computational
+projects; [PlanDrop](https://plandrop.ai) — plan-review-execute for Claude Code on remote machines.
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md) — hub content releases and `piaso-mcp` versions, with the component versions each was tested against.
 
 ## Citation
 
 Cite each component by its own paper — see [`canonical/meta.yaml`](canonical/meta.yaml).
-PIASO: Wu, S.J., Dai, M. *et al.* *Nature* (2026), DOI `10.1038/s41586-025-09996-8`.
+PIASO: Wu, S.J., Dai, M. *et al.* *Nature* (2026), DOI `10.1038/s41586-025-09996-8`. COSG /
+COSGR: Dai M, Pei X, Wang X-J, *Briefings in Bioinformatics* 23(2):bbab579 (2022). LARIS: Dai M,
+Török T, Sun D, et al., bioRxiv (2025), DOI `10.1101/2025.11.26.690796`. cytome and cytorete have
+no paper yet — cite the repositories.
 
 ## Maintainers
 

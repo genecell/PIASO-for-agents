@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "piaso-mcp"
-version = "0.0.2"
-description = "Local stdio MCP server for the PIASO single-cell omics ecosystem — serves knowledge and public data (PIASOmarkerDB via the live piaso.org API), never compute or user data."
+version = "0.1.0"
+description = "Local stdio MCP server for the PIASO single-cell omics ecosystem (PIASO, COSG/COSGR, cytome, LARIS, Emergene, cytorete) — knowledge, the piaso.org tutorial index, the PIASO-data registry and the live PIASOmarkerDB; never compute or user data."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "BSD-3-Clause"
 authors = [{ name = "Min Dai", email = "dai@broadinstitute.org" }]
 maintainers = [{ name = "Min Dai", email = "dai@broadinstitute.org" }]
 dependencies = [
-    "mcp>=1.2.0",
+    "mcp>=1.2.0,<3",   # 1.x (FastMCP) and 2.x (MCPServer) both supported
     "pyyaml>=6.0",
 ]
 

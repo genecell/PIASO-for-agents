@@ -6,7 +6,8 @@
 #   2. Functional: run COSGR (cosg) on a small Seurat object and assert it recovers markers.
 #
 # Run:  Rscript tests/test_r_blocks.R
-# Needs: SeuratObject + COSG (remotes::install_github("genecell/COSGR")).
+# Needs: SeuratObject + COSG — install.packages("COSG", repos = "https://genecell.r-universe.dev")
+#        (or conda-forge r-cosg, or remotes::install_github("genecell/COSGR")); cytome (R) optional for the round-trip check.
 
 suppressMessages({library(SeuratObject); library(COSG)})
 root <- normalizePath(file.path(dirname(sub("--file=", "",
@@ -55,6 +56,22 @@ recovered <- sum(topA %in% paste0("Gene", 1:10))
 cat(sprintf("COSGR groups OK: %s | group-A spiked markers recovered: %d/10\n",
             ok_groups, recovered))
 if (!ok_groups || recovered < 5) { cat("FUNCTIONAL FAIL: COSGR did not recover markers\n"); fail <- fail + 1 }
+
+## 3. optional: cytome (R) round-trip on a Python-written file -------------------
+## Set PIASO_CYTOME_FILE to a .cytome written by the Python package (CI does this with a tiny
+## synthetic file). Skipped when the R cytome package or the file is absent.
+cf <- Sys.getenv("PIASO_CYTOME_FILE", "")
+if (nzchar(cf) && file.exists(cf) && requireNamespace("cytome", quietly = TRUE)) {
+  suppressMessages(library(cytome))
+  x <- read_cytome(cf, as = "cytome"); mats <- cytome_matrices(x); cytome_close(x)
+  sce <- read_cytome(cf)                                   # SingleCellExperiment
+  so  <- read_cytome(cf, as = "Seurat")                    # Seurat
+  ok <- ncol(sce) > 0 && ncol(so) > 0 && "RNA_counts" %in% mats$matrix_name
+  cat(sprintf("cytome (R) round-trip: %s (%d cells, matrices: %s)\n", ok, ncol(sce), paste(mats$matrix_name, collapse = ",")))
+  if (!isTRUE(ok)) fail <- fail + 1
+  out <- tempfile(fileext = ".cytome"); write_cytome(so, out)
+  cat(sprintf("write_cytome from Seurat: %s\n", file.exists(out)))
+} else cat("cytome (R) round-trip skipped (PIASO_CYTOME_FILE unset or package missing)\n")
 
 if (fail > 0) { cat(sprintf("R TESTS FAILED: %d\n", fail)); quit(status = 1) }
 cat("ALL R TESTS PASSED\n")

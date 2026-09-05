@@ -1,0 +1,83 @@
+# PIASO-for-agents
+
+> Agent-neutral knowledge hub for the PIASO single-cell omics ecosystem (Gord Fishell Lab, HMS / Broad). One canonical source generates every agent format (Claude skill, Cursor rules, AGENTS.md, llms.txt, MCP).
+
+Tested against: piaso-tools 1.2.3 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.1 · cytome (R) 0.1.0 · laris 0.13.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-04). Tutorials: https://piaso.org/tutorials/ · API reference: https://piaso.org/api/
+
+## Components
+- [PIASO](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/components/piaso.md): python, analysis layer: QC, doublets, INFOG normalization, SVD/GDR, clustering, annotation, gene-set scoring (PIASOscore), SCALAR, plotting, piaso.data; install `pip install piaso-tools`
+- [COSG](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/components/cosg.md): python, marker gene / marker region identification by cosine specificity; analytic p-values; GPU; streams from cytome; install `pip install cosg`
+- [COSGR](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/components/cosg.md): r, COSG for Seurat / SingleCellExperiment objects in R; install `install.packages("COSG", repos = "https://genecell.r-universe.dev")` (documented with cosg)
+- [cytome](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/components/cytome.md): python, single-file SQLite .cytome store; the streaming backend every other component reads/writes (matrices, cells/genes tables, embeddings, graphs, fragments, tissue images, provenance); install `pip install cytome`
+- [cytome (R)](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/components/cytome.md): r, native R reader / writer / streamer for .cytome -> SingleCellExperiment or Seurat; no Python dependency; not an analysis package; install `install.packages("cytome", repos = "https://genecell.r-universe.dev")` (documented with cytome)
+- [LARIS](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/components/laris.md): python, ligand-receptor interaction analysis in SPATIAL transcriptomics (per-cell scores, spatial specificity, sender-receiver cell-type scores, exact matched-gene p-values, cross-condition comparison); install `pip install laris`
+- [Emergene](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/components/emergene.md): python, individual-cell differential transcriptomics across conditions; install `pip install emergene`
+- [cytorete](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/components/cytorete.md): python, cell-type-resolved gene regulatory network (regulon) inference on the PIASO stack; RNA regulon chain shipped, multiome/ATAC chains withheld; install `pip install cytorete`
+
+## Workflows
+- [Workflow — end-to-end scRNA-seq (load → QC → clusters → markers → cell types → GDR)](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/workflows/end_to_end_scrnaseq.md)
+- [Workflow — gene regulatory networks / regulons (cytorete)](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/workflows/gene_regulatory_networks.md)
+- [Workflow — ligand–receptor / cell–cell communication](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/workflows/ligand_receptor.md)
+- [Workflow — marker-based cell-type annotation (and reference projection)](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/workflows/marker_based_annotation.md)
+- [Workflow — cell-type inference from PIASOmarkerDB](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/workflows/markerdb_annotation.md)
+- [Workflow — spatial transcriptomics (Xenium / Visium HD / MERFISH / Stereo-seq / Slide-tags)](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/workflows/spatial_transcriptomics.md)
+- [Workflow — streaming / out-of-core analysis on a `.cytome`](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/workflows/streaming_large_data.md)
+
+## Tutorials (piaso.org, executed)
+- [Human PBMC scRNA-seq end to end (AnnData)](https://piaso.org/tutorials/san2-end-to-end-anndata/): counts -> two-tailed QC -> doublets -> clusters -> artefact clusters -> cell types; the place to start
+- [Human PBMC scRNA-seq end to end (cytome)](https://piaso.org/tutorials/san2-end-to-end-cytome/): the same analysis streamed from disk; filter writes a new file; annotation written back to the file
+- [Mouse brain scRNA-seq end to end (AnnData)](https://piaso.org/tutorials/rna-end-to-end-anndata/): Cell Ranger counts -> QC -> doublets -> clusters -> two annotation routes (PIASOmarkerDB vs reference) -> GDR
+- [Mouse brain scRNA-seq end to end (cytome)](https://piaso.org/tutorials/rna-end-to-end-cytome/): the same mouse analysis, streamed
+- [Multiple samples: QC, embedding and annotation](https://piaso.org/tutorials/rna-multi-sample/): per-library doublets (scrublet library_key), per-sample QC, GDR with batch_key vs SVD, silhouette check, runHarmony when a batch effect is real
+- [Two preparations of one tissue: cells vs nuclei](https://piaso.org/tutorials/rna-multi-sample-mouse/): a real batch effect, measured, and where it comes from
+- [Multiple samples in one cytome](https://piaso.org/tutorials/rna-multi-sample-cytome/): cytome.merge, then the multi-sample analysis streamed from one file
+- [Marker-gene-guided dimensionality reduction (GDR)](https://piaso.org/tutorials/gdr/): runGDR / runGDRParallel with batch_key and groupby=None; batch mixing vs cell-type purity measured
+- [Cell type prediction with GDR](https://piaso.org/tutorials/gdr-predict-cell-type/): predictCellTypeByGDR: label transfer from an annotated reference
+- [projectGDR: putting new data into a reference's space](https://piaso.org/tutorials/project-gdr/): runGDR(save_reference=True) then projectGDR(query, reference); mode='reference' vs 'self'; novelty flags
+- [Local Leiden clustering](https://piaso.org/tutorials/leiden-local/): piaso.tl.leiden_local: re-cluster inside selected groups
+- [GDR at scale: 200,000 cells in 17 minutes](https://piaso.org/tutorials/gdr-at-scale/): the whole pipeline on a .cytome path; memory/time knobs
+- [GDR and SVD on 1.5 million cells](https://piaso.org/tutorials/gdr-vs-svd-1p5m/): runtime, peak memory and separation on a 1.5M-nucleus atlas
+- [GDR on developmental data](https://piaso.org/tutorials/gdr-developmental/): stages rather than terminal types
+- [GDR beyond transcriptomics](https://piaso.org/tutorials/gdr-applications/): images as expression matrices
+- [Emergene: differential analysis at the level of the cell](https://piaso.org/tutorials/emergene/): runEMERGENE downstream of PIASO (use_rep='X_gdr', layer='infog'); per-condition vs all-in-one
+- [COSG: marker genes and their significance](https://piaso.org/tutorials/cosg-markers/): mu / expressed_pct / n_genes_user; calculate_pvalues columns; plotMarkerDotplot / plotMarkerDendrogram; IQR normalisation across cell types; the double-dipping caveat
+- [COSG on a cytome](https://piaso.org/tutorials/cosg-cytome/): run_cosg_cytome / cosg.cosg(ds); output_format shapes; what layer= means on a file
+- [COSG across batches](https://piaso.org/tutorials/cosg-batch/): batch_key scores per batch and averages; batch_cell_number_threshold
+- [COSG on the GPU](https://piaso.org/tutorials/cosg-gpu/): device='gpu'; measured speed-ups by matrix size
+- [COSG on spatial transcriptomics](https://piaso.org/tutorials/cosg-spatial/): organ markers on a whole embryo section, plotted in tissue space
+- [Marker-based cell type prediction](https://piaso.org/tutorials/marker-cell-type-prediction/): predictCellTypeByMarker from COSG markers (mu=10) on a GDR embedding; 95.4% held-out accuracy; the same call against PIASOmarkerDB
+- [PIASOmarkerDB API client](https://piaso.org/tutorials/markerdb-api/): getMarkers by study/gene/cell_type/species; as_dict=True returns a tuple; analyzeMarkers from a gene list to cell types
+- [Gene set scoring (PIASOscore)](https://piaso.org/tutorials/gene-set-scoring/): piaso.tl.score with compute_pvalues; why matched controls; a whole pathway database at once; COSG on the score matrix; on a cytome
+- [KEGG and drug-target gene sets](https://piaso.org/tutorials/kegg-drug-targets/): 320 pathways + 659 drug target sets scored per cell, then which cell type each belongs to
+- [Motif analysis](https://piaso.org/tutorials/motif-analysis/): genome -> promoters -> PWM scan (piaso.pp.scan_motifs) -> enrichment; the background choice
+- [Xenium with tissue-image overlay](https://piaso.org/tutorials/spatial-xenium/): read_10x_h5 + cells.csv -> obsm['spatial'] -> infog/SVD/leiden -> cytome.from_anndata + add_spatial_image -> plotEmbedding(image=True) -> cells_in_region ROI
+- [Xenium into a cytome directly](https://piaso.org/tutorials/spatial-xenium-cytome/): cytome.from_10x_h5 -> add_embedding('spatial') + set_spatial_coords -> streamed clustering -> image overlay
+- [Xenium Prime 5K: mouse brain end to end](https://piaso.org/tutorials/xenium-prime-brain/): 63,173 cells x 5,006 genes from the raw bundle to annotated clusters
+- [Atera WTA: near-whole-transcriptome in situ](https://piaso.org/tutorials/atera-wta/): 18,028 targets in situ
+- [Downstream in situ: pathways, ligand-receptor and regulons](https://piaso.org/tutorials/xenium-downstream/): LR-pair coverage check first; KEGG per cell; LARIS on a section (plotCCCSpatial); cytorete.inferRegulon on RNA-only spatial data
+- [MERFISH sections in one cytome](https://piaso.org/tutorials/spatial-merfish/): several sections in one file, plot_embeddings_split by section
+- [Stereo-seq whole embryo](https://piaso.org/tutorials/spatial-stereoseq/): bin-resolution section; rotateSpatialCoordinates on a cytome; zoom by coordinates (cell_mask)
+- [GDR on spatial transcriptomics: eight embryonic stages](https://piaso.org/tutorials/gdr-mosta-allstage/): 520,815 bins in one embedding
+- [cytorete: RNA regulon inference](https://piaso.org/tutorials/cytorete-regulons/): fetch_jaspar/fetch_2bit/fetch_genome -> inferRegulon(ds, 'hg38', 'Subclass', tf_list=) -> X_regulon(+_pval) -> regulonActivity / regulonSpecificity / four plots
+- [cytorete on spatial data](https://piaso.org/tutorials/cytorete-spatial-stereoseq/): regulons across a whole embryo section, compared against published regulons
+- [Regulon dynamics across development](https://piaso.org/tutorials/cytorete-regulon-dynamics/): half a million bins, eight stages
+- [SCALAR: ligand-receptor interaction analysis](https://piaso.org/tutorials/scalar/): load_lr_database -> COSG all-gene specificity matrix -> runSCALAR (exact matched-gene null, 1.67M interactions) -> plotLigandReceptorInteraction / Lollipop; split by CellChatDB annotation
+- [LARIS: ligand-receptor interactions in spatial data](https://piaso.org/tutorials/laris/): SCALAR vs LARIS decision; links the LARIS repo tutorials 01-08
+- [Plotting](https://piaso.org/tutorials/plotting/): piaso.pl end to end: embedding, dotplot, violin, scatter, split embeddings
+- [Colour palettes](https://piaso.org/tutorials/color-palettes/): built-in palettes (piaso.pl.color.*) and custom ones
+- [Datasets and genome references](https://piaso.org/tutorials/datasets-and-references/): piaso.data.list_datasets / load_dataset / fetch_dataset / dataset_info; genomes; caching and data_dir
+- [cytome basics](https://piaso.org/tutorials/cytome-basics/): create / from_anndata / from_h5ad(backed=True) / from_cellranger; cells.query; RNA.counts slicing and iter_rows; embeddings; provenance; set_categories
+- [Converting: AnnData, Seurat, SingleCellExperiment](https://piaso.org/tutorials/cytome-conversion/): the six conversions; what travels (graphs by default, layers opt-in, feature annotations beyond id/symbol do not)
+- [cytome in R](https://piaso.org/tutorials/cytome-in-r/): read_cytome(as=), write_cytome, delayed=TRUE out-of-core, cytome_stream
+- [Agents and project tooling](https://piaso.org/tutorials/agents-and-tooling/): PIASO-for-agents, stato, PlanDrop — why an agent should read the current API
+
+## Optional
+- [gotchas](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/gotchas.md)
+- [data fixtures and registry](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/data.md)
+- [tutorial index](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/tutorials.md)
+- [stato](https://stato.hiniki.com) — structured expertise management for long computational projects (not an analysis package)
+- [PlanDrop](https://plandrop.ai) — plan-review-execute driver for Claude Code on remote machines (not an analysis package)
+
+---
+Maintained by **[The Fishell Laboratory](https://fishelllab.hms.harvard.edu)** (Harvard Medical School / Broad Institute).
+

@@ -44,7 +44,7 @@ jobs:
         run: |
           python -m venv /tmp/t
           /tmp/t/bin/pip install wheelhouse/*.whl
-          /tmp/t/bin/python -c "from piaso_mcp import server as s; assert 'COSGR' in s.resolve_install(['cosg'],'r'); assert (s.DATA / 'meta.yaml').exists(); print('wheel OK')"
+          /tmp/t/bin/python -c "from piaso_mcp import server as s; assert 'r-universe' in s.resolve_install(['cosg'], 'r'); assert (s.DATA / 'meta.yaml').exists(); print('wheel OK')"
       - uses: actions/upload-artifact@v4
         with: { name: piaso-mcp-dist, path: wheelhouse/ }
 

@@ -9,7 +9,7 @@
     {
       "name": "piaso",
       "source": "./dist/claude",
-      "description": "PIASO single-cell omics ecosystem: marker genes (COSG/COSGR), gene-set scoring, cell-type annotation, ligand-receptor analysis (SCALAR/LARIS), differential expression (Emergene)."
+      "description": "PIASO single-cell omics ecosystem: scanpy-free pipeline, marker genes (COSG/COSGR), gene-set scoring, annotation (PIASOmarkerDB), ligand-receptor (SCALAR/LARIS), regulons (cytorete), .cytome streaming, Emergene."
     }
   ]
 }

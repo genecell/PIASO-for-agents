@@ -63,11 +63,63 @@ prompts:
   - id: neg_nfcore
     text: "Run nf-core rnaseq on this GEO accession"
     fire: false
-  - id: neg_qc
+  - id: qc_h5ad
     text: "Do QC on this .h5ad"
-    fire: false
-    note: "generic scanpy QC; the .h5ad token must not over-trigger"
+    fire: true
+    component: [PIASO]
+    language: python
+    note: "2026-09: flipped from a negative control — PIASO 1.2 ships QC/doublets (piaso.pp.calculateCellMetrics, scrublet), so the skill should offer them"
   - id: neg_scvi
     text: "Batch-correct with scVI"
     fire: false
     note: "route to scvi-tools, not PIASO"
+  # ---- 2026-09 additions: cytome / cytorete / new PIASO surface ----
+  - id: regulons_grn
+    text: "Infer gene regulatory networks / regulons for my cell types from scRNA-seq"
+    fire: true
+    component: [cytorete]
+    note: "markers vs regulons rule — must route to cytorete, not COSG"
+  - id: stream_from_disk
+    text: "My dataset is 800k cells and doesn't fit in memory — how do I cluster it?"
+    fire: true
+    component: [cytome, PIASO]
+    note: "AnnData-vs-cytome rule — should propose a .cytome + the same PIASO calls"
+  - id: xenium_overlay
+    text: "Plot my Xenium clusters over the DAPI image and select a region"
+    fire: true
+    component: [PIASO, cytome]
+  - id: lr_compare_conditions
+    text: "Compare ligand-receptor interactions between disease and control Visium samples"
+    fire: true
+    component: [LARIS]
+    note: "compareLARIS; spatial -> LARIS, not SCALAR"
+  - id: cytome_in_r
+    text: "Open a .cytome file in R as a Seurat object"
+    fire: true
+    component: [cytome]
+    language: r
+  - id: cosg_pvalues
+    text: "Are my COSG markers statistically significant?"
+    fire: true
+    component: [COSG]
+    language: python
+    note: "calculate_pvalues=True (Python-only)"
+  - id: doublets
+    text: "Detect doublets in my 10x sample without installing scrublet"
+    fire: true
+    component: [PIASO]
+    language: python
+  - id: seurat_to_anndata
+    text: "Convert my Seurat object to AnnData for a Python collaborator"
+    fire: true
+    component: [cytome]
+    note: "cytome as the interchange format (write_cytome -> to_anndata)"
+  # ---- 2026-09 negative controls ----
+  - id: neg_scenicplus
+    text: "Run SCENIC+ on my multiome data"
+    fire: false
+    note: "a named competitor tool; do not hijack with cytorete"
+  - id: neg_seurat_findmarkers
+    text: "Use Seurat FindAllMarkers on my object"
+    fire: false
+    note: "explicit Seurat request; COSGR must not override it"

@@ -1,7 +1,7 @@
 {
   "name": "piaso",
-  "version": "0.0.1",
-  "description": "PIASO single-cell omics ecosystem for coding agents: marker gene identification (COSG/COSGR), gene-set enrichment scoring, cell-type annotation, single-cell (SCALAR) and spatial (LARIS) ligand-receptor analysis, and cross-condition differential expression (Emergene).",
+  "version": "0.1.0",
+  "description": "PIASO single-cell omics ecosystem for coding agents: scanpy-free scRNA-seq pipeline (QC, INFOG, GDR, clustering), marker genes with p-values (COSG/COSGR), gene-set scoring (PIASOscore), cell-type annotation (PIASOmarkerDB), single-cell (SCALAR) and spatial (LARIS) ligand-receptor analysis, regulons (cytorete), streaming from .cytome files (Python + R), cross-condition DE (Emergene).",
   "author": {
     "name": "Min Dai",
     "email": "dai@broadinstitute.org",

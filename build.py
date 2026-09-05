@@ -7,8 +7,12 @@ Pure text transformation. Reads canonical/meta.yaml + canonical/*.md and writes:
   dist/agents/components/<repo>/AGENTS.md  (fan-out, one per component repo)
   dist/cursor/.cursor/rules/piaso.mdc
   dist/copilot/.github/copilot-instructions.md
-  dist/llms/{llms.txt, llms-full.txt}
-  dist/mcp/                                (copied from mcp/ source; server is generated-once)
+  dist/llms/{llms.txt, llms-full.txt}      (relative links — for the hub)
+  dist/llms/piaso.org/{llms.txt, llms-full.txt}  (absolute raw-GitHub links — drop-in for piaso.org/web/public/)
+  dist/mcp/                                (copied from mcp/ source + the bundled canonical snapshot)
+
+Also generates one derived canonical file, tutorials.md (the piaso.org tutorial index from
+meta.yaml), so every target and the MCP snapshot carry it.
 
 No cleverness: flat-file targets (Copilot, one Cursor rule) get overview + a workflow digest
 capped to the format's size budget (see docs/recon/format-matrix.md); multi-file targets
@@ -18,7 +22,7 @@ Run:  python build.py            # build all
       python build.py --check    # build to a temp dir and diff against dist/ (CI sync-check)
 """
 from __future__ import annotations
-import argparse, shutil, sys, tempfile, filecmp, os
+import argparse, shutil, sys, tempfile, filecmp, re
 from pathlib import Path
 import yaml
 
@@ -28,7 +32,8 @@ META = yaml.safe_load((CANON / "meta.yaml").read_text())
 
 # Claude's description field is the trigger and is hard-capped at 1024 chars.
 DESC_CAP = 1024
-COPILOT_CAP = 6000  # ~2 pages, soft; keep the flat file tight
+COPILOT_CAP = 20000  # soft; must hold the whole overview (router + decision rules) + the workflow list
+RAW = "https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/"
 
 
 def read(p: Path) -> str:
@@ -48,23 +53,53 @@ def component_files() -> list[Path]:
     return sorted((CANON / "components").glob("*.md"))
 
 
+def code_components() -> list[dict]:
+    return [c for c in META["components"] if c["id"] != "piaso-data"]
+
+
+# ---------------------------------------------------------------- derived text
+def tested_against() -> str:
+    parts = [f"{c.get('pypi') or c['name']} {c['version_last_tested']}" for c in META["components"]
+             if c.get("version_last_tested")]
+    return f"Tested against: {' · '.join(parts)} ({META['hub']['tested_on']})."
+
+
+def tutorials_md() -> str:
+    """The piaso.org tutorial index as markdown (generated from meta.yaml)."""
+    base = META["hub"]["tutorials"].rstrip("/") + "/"
+    out = ["# piaso.org tutorials — index", "",
+           f"Executed, human-reviewed tutorials at {META['hub']['tutorials']} (generated API reference: "
+           f"{META['hub']['api_reference']}). Each runs against the real dataset it names; the numbers and "
+           "figures are what the code produced. Grouped by topic; `components` says which packages it uses.", ""]
+    by_topic: dict[str, list[dict]] = {}
+    for t in META.get("tutorials", []):
+        by_topic.setdefault(t["topic"], []).append(t)
+    for topic, items in by_topic.items():
+        out.append(f"## {topic}")
+        out.append("")
+        for t in items:
+            comps = ", ".join(t.get("components", [])) or "—"
+            out.append(f"- [{t['title']}]({base}{t['slug']}/) — {t['covers']} *({comps})*")
+        out.append("")
+    return "\n".join(out)
+
+
 # ---------------------------------------------------------------- trigger text
 def build_description() -> str:
-    """One-paragraph trigger from meta.triggers, capped at 1024 chars."""
+    """One-paragraph trigger from meta.triggers, hard-capped at 1024 chars."""
     t = META["triggers"]
     names = ", ".join(t["component_names"])
     tasks = "; ".join(t["task_phrasings"])
     fmts = ", ".join(t["file_formats"])
     desc = (
-        "PIASO single-cell omics ecosystem for scRNA-seq / spatial analysis. "
+        "PIASO single-cell omics ecosystem (scRNA-seq, spatial; Python + R). "
         f"Use for: {tasks}. "
         f"Components (each a standalone trigger): {names}. "
-        "Covers Python (scanpy/AnnData) and R (Seurat/SCE, via COSGR). "
-        f"Fires on {fmts}, and on any of the component names even without 'PIASO'. "
-        "Includes the single-cell (SCALAR) vs spatial (LARIS) ligand-receptor choice."
+        f"Fires on {fmts}, and on any component name even without 'PIASO'. "
+        "Includes SCALAR-vs-LARIS, AnnData-vs-cytome, COSG-vs-cytorete and Python-vs-R choices."
     )
     if len(desc) > DESC_CAP:
-        desc = desc[: DESC_CAP - 1].rstrip() + "…"
+        raise SystemExit(f"skill description is {len(desc)} chars > {DESC_CAP}; trim meta.yaml triggers")
     return desc
 
 
@@ -75,6 +110,7 @@ def digest(max_chars: int) -> str:
     for f in workflow_files():
         first = next((ln for ln in read(f).splitlines() if ln.startswith("# ")), f.stem)
         wf.append(f"- **{first.lstrip('# ').strip()}** (`workflows/{f.name}`)")
+    wf.append(f"\nTutorial index: {META['hub']['tutorials']} · {tested_against()}")
     parts.append("\n".join(wf))
     out = "\n\n".join(parts)
     return out[:max_chars].rstrip() + ("\n" if len(out) <= max_chars else "\n\n*(truncated — see the hub)*\n")
@@ -93,7 +129,9 @@ def build_claude(dist: Path) -> None:
     body += "\nWorkflow references (cross-component tasks):\n"
     for f in workflow_files():
         body += f"- `references/workflows/{f.name}`\n"
-    body += "\nAlso: `references/gotchas.md`, `references/data.md`.\n"
+    body += ("\nAlso: `references/gotchas.md` (layer contracts, deprecated names), `references/data.md` "
+             "(fixtures, registry), `references/tutorials.md` (the piaso.org tutorial index — point the "
+             "user at the executed tutorial for their platform).\n\n" + tested_against() + "\n")
     (skill / "SKILL.md").write_text(front + body)
     # references map 1:1
     (refs / "components").mkdir(exist_ok=True)
@@ -105,6 +143,7 @@ def build_claude(dist: Path) -> None:
     for extra in ("gotchas.md", "data.md"):
         if (CANON / extra).exists():
             shutil.copy(CANON / extra, refs / extra)
+    (refs / "tutorials.md").write_text(tutorials_md())
     shutil.copy(ROOT / "LICENSE", skill / "LICENSE.txt")
 
 
@@ -112,18 +151,19 @@ def _agents_body(scope: str) -> str:
     return (
         f"# AGENTS.md — {scope}\n\n"
         "This repository is part of the **PIASO single-cell omics ecosystem**. Full, "
-        "cross-component, agent-neutral documentation (with runnable, tested code blocks "
-        "for every component in Python and R) lives in the hub:\n"
-        "**https://github.com/genecell/PIASO-for-agents**\n\n"
+        "cross-component, agent-neutral documentation (with executed code blocks for every "
+        "component in Python and R) lives in the hub:\n"
+        "**https://github.com/genecell/PIASO-for-agents** — tutorials: "
+        f"{META['hub']['tutorials']} — API reference: {META['hub']['api_reference']}\n\n"
         "## Ecosystem at a glance\n"
         + "\n".join(
-            f"- **{c['id']}** (`{c.get('pypi') or c.get('import','')}`, {'/'.join(c['language'])}): "
-            f"install `{c.get('install','see hub')}`"
-            for c in META["components"] if c["id"] != "piaso-data"
+            f"- **{c['name']}** (`{c.get('pypi') or c.get('import', '')}`, {'/'.join(c['language'])}): "
+            f"{c.get('role', '')} — install `{c.get('install', 'see hub')}`"
+            for c in code_components()
         )
         + "\n\n## Cross-component decision rules\n"
         + "\n".join(f"- **{r['id']}**: {r['rule'].strip()}" for r in META["decision_rules"])
-        + "\n\nFor full API, workflows, and citations, read the hub.\n"
+        + f"\n\n{tested_against()} For full API, workflows, and citations, read the hub.\n"
         + _maintainer_footer()
     )
 
@@ -151,11 +191,11 @@ def build_cursor(dist: Path) -> None:
     front = (
         "---\n"
         f"description: {build_description()}\n"
-        "globs: [\"*.h5ad\", \"*.rds\", \"**/*.py\", \"**/*.R\"]\n"
+        "globs: [\"*.h5ad\", \"*.rds\", \"*.cytome\", \"**/*.py\", \"**/*.R\"]\n"
         "alwaysApply: false\n"
         "---\n\n"
     )
-    (d / "piaso.mdc").write_text(front + digest(9000))
+    (d / "piaso.mdc").write_text(front + digest(20000))
 
 
 def build_copilot(dist: Path) -> None:
@@ -166,39 +206,57 @@ def build_copilot(dist: Path) -> None:
     )
 
 
-def build_llms(dist: Path) -> None:
-    d = dist / "llms"
-    d.mkdir(parents=True, exist_ok=True)
+def _llms_index(link) -> str:
     hub = META["hub"]
-    idx = [f"# {hub['name']}", "", f"> {hub['description'].strip()}", ""]
+    idx = [f"# {hub['name']}", "", f"> {hub['description'].strip()}", "",
+           f"{tested_against()} Tutorials: {hub['tutorials']} · API reference: {hub['api_reference']}", ""]
     idx.append("## Components")
     doc_stems = {f.stem for f in component_files()}
-    for c in META["components"]:
-        if c["id"] == "piaso-data":
-            continue
-        # resolve to an existing doc file; components without their own file
-        # (e.g. cosgr) are documented inside their counterpart's file (cosg.md).
+    for c in code_components():
+        # components without their own file are documented inside their counterpart's file
         stem = c["id"] if c["id"] in doc_stems else c.get("counterpart", c["id"])
         note = "" if c["id"] in doc_stems else f" (documented with {stem})"
-        idx.append(f"- [{c['id']}](components/{stem}.md): {'/'.join(c['language'])}, "
-                   f"install `{c.get('install','see hub')}`{note}")
+        idx.append(f"- [{c['name']}]({link(f'components/{stem}.md')}): {'/'.join(c['language'])}, "
+                   f"{c.get('role', '')}; install `{c.get('install', 'see hub')}`{note}")
     idx.append("\n## Workflows")
     for f in workflow_files():
         first = next((ln for ln in read(f).splitlines() if ln.startswith("# ")), f.stem)
-        idx.append(f"- [{first.lstrip('# ').strip()}](workflows/{f.name})")
+        idx.append(f"- [{first.lstrip('# ').strip()}]({link(f'workflows/{f.name}')})")
+    idx.append("\n## Tutorials (piaso.org, executed)")
+    base = hub["tutorials"].rstrip("/") + "/"
+    for t in META.get("tutorials", []):
+        idx.append(f"- [{t['title']}]({base}{t['slug']}/): {t['covers']}")
     idx.append("\n## Optional")
-    idx.append("- [gotchas](gotchas.md)")
-    idx.append("- [data fixtures](data.md)")
+    idx.append(f"- [gotchas]({link('gotchas.md')})")
+    idx.append(f"- [data fixtures and registry]({link('data.md')})")
+    idx.append(f"- [tutorial index]({link('tutorials.md')})")
+    for s in hub.get("see_also", []):
+        idx.append(f"- [{s['name']}]({s['url']}) — {s['role']}")
     idx.append(_maintainer_footer())
-    (d / "llms.txt").write_text("\n".join(idx) + "\n")
-    # llms-full.txt = everything concatenated
-    full = [f"# {hub['name']} — full\n"]
+    return "\n".join(idx) + "\n"
+
+
+def _llms_full() -> str:
+    full = [f"# {META['hub']['name']} — full\n\n{tested_against()}\n"]
     for name in ["overview.md"] + [f"components/{f.name}" for f in component_files()] \
             + [f"workflows/{f.name}" for f in workflow_files()] + ["gotchas.md", "data.md"]:
         p = CANON / name
         if p.exists():
             full.append(f"\n\n<!-- ===== {name} ===== -->\n\n" + p.read_text())
-    (d / "llms-full.txt").write_text("".join(full))
+    full.append("\n\n<!-- ===== tutorials.md ===== -->\n\n" + tutorials_md())
+    return "".join(full)
+
+
+def build_llms(dist: Path) -> None:
+    d = dist / "llms"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "llms.txt").write_text(_llms_index(lambda rel: rel))
+    (d / "llms-full.txt").write_text(_llms_full())
+    # the piaso.org copy: every canonical link absolute (raw GitHub), same content otherwise
+    site = d / "piaso.org"
+    site.mkdir(exist_ok=True)
+    (site / "llms.txt").write_text(_llms_index(lambda rel: RAW + rel))
+    (site / "llms-full.txt").write_text(_llms_full())
 
 
 def build_mcp(dist: Path) -> None:
@@ -208,7 +266,7 @@ def build_mcp(dist: Path) -> None:
     dest = dist / "mcp"
     if dest.exists():
         shutil.rmtree(dest)
-    shutil.copytree(src, dest, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info"))
+    shutil.copytree(src, dest, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info", "dist", "build"))
     # populate the server's bundled canonical snapshot (generated, never hand-edited)
     data = dest / "piaso_mcp" / "data"
     if data.exists():
@@ -219,6 +277,7 @@ def build_mcp(dist: Path) -> None:
     for name in ("overview.md", "gotchas.md", "data.md"):
         if (CANON / name).exists():
             shutil.copy(CANON / name, data / name)
+    (data / "tutorials.md").write_text(tutorials_md())
     for f in component_files():
         shutil.copy(f, data / "components" / f.name)
     for f in workflow_files():
@@ -237,7 +296,7 @@ def build_all(dist: Path) -> None:
     dist.mkdir(parents=True)
     for name, fn in TARGETS.items():
         fn(dist)
-    print("built:", ", ".join(TARGETS))
+    print("built:", ", ".join(TARGETS), f"| skill description {len(build_description())}/{DESC_CAP} chars")
 
 
 def check() -> int:
@@ -259,7 +318,7 @@ def _dircmp_diff(a: Path, b: Path) -> list[str]:
     out: list[str] = []
 
     def walk(x: Path, y: Path, rel: str = ""):
-        cmp = filecmp.dircmp(x, y)
+        cmp = filecmp.dircmp(x, y, ignore=["__pycache__", "dist", "build"])
         for n in cmp.left_only:
             out.append(f"only in dist/: {rel}{n}")
         for n in cmp.right_only:

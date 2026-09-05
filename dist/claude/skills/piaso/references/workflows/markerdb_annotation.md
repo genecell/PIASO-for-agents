@@ -1,61 +1,80 @@
 # Workflow — cell-type inference from PIASOmarkerDB
 
-Infer cell types for a gene list by querying **PIASOmarkerDB**, a curated marker database, over its
-live REST API. Use this when you have a set of genes (e.g. cluster markers) and want to know which
-cell types they point to, drawing on published atlases rather than your own reference. Both blocks
-are executed and passing.
+Query **PIASOmarkerDB**, a curated marker database (36 studies, human + mouse; brain, blood, bone
+marrow, breast, thymus, whole-body atlases), over its live REST API: pull marker sets by study /
+gene / cell type, or go the other way — from a gene list (a cluster's COSG markers, a DE hit list)
+to the cell types it matches. All blocks are executed. Mirrors the executed piaso.org tutorial
+*PIASOmarkerDB API client*.
 
 ## Install
 
 ```bash
-pip install piaso-tools "matplotlib<3.9"
+pip install piaso-tools
 ```
 
-**Internet required.** PIASOmarkerDB is a **remote REST API client** (base
-`https://piaso.org/piasomarkerdb/api/v1/`) — it is not bundled data, so these blocks need network
-egress to `piaso.org`. This workflow is **Python-only**; there is no R client.
+**Internet required.** The client issues HTTP calls to `https://piaso.org/piasomarkerdb/api/v1/`
+(cache under `~/.piaso/markers`); nothing is bundled. Python-only — from R or another agent use
+the `piaso-mcp` server (`query_marker_db`, `list_studies`) or the REST endpoints
+`/markers?gene=|cell_type=|study=|species=|tissue=|limit=`, `/studies`, `/genes` directly.
 
-## Step 1 — Query the database
-
-Explore what the DB contains and pull markers by filter. Returns pandas DataFrames (or lists for the
-`list_*` meta-queries). No AnnData involved.
+## Step 1 — What is in there, and one study
 
 ```python
+import pandas as pd
 import piaso
-studies = piaso.tl.queryPIASOmarkerDB(list_studies=True)      # list[str], 36 studies
-df = piaso.tl.queryPIASOmarkerDB(cell_type="Microglia", limit=5)
-# columns: cell_type, condition, gene, species, specificity_score, study_publication, tissue
-df2 = piaso.tl.getMarkers(gene="AIF1", limit=3)               # getMarkers is an alias of queryPIASOmarkerDB
+studies = piaso.tl.getMarkers(list_studies=True)                  # list[str], 36 studies (getMarkers == queryPIASOmarkerDB)
+df = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex")  # (1300, 7): cell_type, condition, gene, species, specificity_score, study_publication, tissue
+markers_df, marker_sets = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)   # TUPLE: table + {cell_type: [genes]} (26 types)
 ```
-**Out:** DataFrames of marker records; `studies` is the list of available study keys. Filters
-accepted: `gene`, `cell_type`, `study`, `species`, `tissue`, `condition`, `min_score`, `max_score`,
-`limit`.
+`specificity_score` is a COSG score (higher = more exclusive to that type). **`as_dict=True`
+returns both** — unpack two names; the dict is what `predictCellTypeByMarker` consumes.
 
-## Step 2 — Infer cell types for a gene list
-
-Pass a gene list to `analyzeMarkers`; it queries the DB for each gene, groups hits by
-(cell_type, study, species, tissue, condition), and ranks contexts by matched-gene count then
-average specificity. A plain list returns a ranked DataFrame.
+## Step 2 — Ask the other way round
 
 ```python
-res = piaso.tl.analyzeMarkers(["AIF1", "P2RY12", "CX3CR1", "CSF1R"], n_top_genes=50)  # infer cell type
-# DataFrame cols: cell_type, study_publication, species, tissue, condition,
-#                 matched_gene_count, matched_genes, avg_specificity
+piaso.tl.getMarkers(gene="Sst")                                    # where is Sst a marker, across studies (interneurons AND gut enteroendocrine cells)
+piaso.tl.getMarkers(cell_type="Pvalb Gaba")                        # names must match the study vocabulary exactly
+piaso.tl.getMarkers(species="Mouse", limit=5)
+piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", min_score=5.0)
+piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", list_cell_types=True)[:6]   # ['001 CLA-EPd-CTX Car3 Glut', '004 L6 IT CTX Glut', ...]
+len(piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", list_genes=True))      # 23657
 ```
-**Out:** ranked DataFrame of candidate cell types for the gene list (top row = best match).
+Filters: `gene`, `cell_type`, `study`, `species`, `tissue`, `condition`, `min_score`, `max_score`,
+`limit`. `"Astro-TE"` returns 0 rows because the stored name is `"319 Astro-TE NN"` — list first.
 
-## Notes
+## Step 3 — From a gene list to a cell type
 
-- `analyzeMarkers` also accepts a COSG-style DataFrame (columns = clusters) or a
-  `{cluster: [genes]}` dict; those inputs return a `(results_dict, top_hits)` **tuple**, where
-  `top_hits[cluster]` is a plain **cell-type-name string** (or `"Unassigned"`) — not a DataFrame
-  or nested dict. Map it straight onto clusters, e.g.
-  `adata.obs["cell_type"] = adata.obs["Leiden"].map(top_hits)`.
-- This composes with `marker_based_annotation.md`: `predictCellTypeByMarker` transfers the
-  *marker-set keys* onto cells (cluster IDs, if that's what you keyed the marker set by), so to
-  attach real biological names, feed the same COSG marker set to `analyzeMarkers` and map its
-  `top_hits` back onto the clusters.
-- Narrow noisy results with `species` / `tissue` / `studies` (validated against `list_studies`;
-  unknown study names raise a `ValidationError`), or `exclude_studies` / `exclude_cell_types`.
-- This complements `marker_based_annotation.md`: that workflow transfers **your** cluster labels via
-  scoring; this one names cell types from a **curated public** database.
+```python
+res = piaso.tl.analyzeMarkers(["Sst", "Pvalb", "Vip", "Lamp5", "Gad1", "Gad2"])
+# ranked DataFrame: cell_type, study_publication, species, tissue, condition, matched_gene_count, matched_genes, avg_specificity
+# every top hit is an inhibitory neuron type across four studies and two species
+```
+Ranking is by matched-gene count, then average specificity. Narrow noisy results with
+`species=`, `tissue=`, `studies=` (validated against `list_studies`), `exclude_studies=`,
+`exclude_cell_types=`.
+
+## Step 4 — Name your clusters
+
+Feed the per-cluster COSG output (dict or the COSG DataFrame); the return becomes a **tuple**
+`(results_dict, top_hits)` with `top_hits[cluster]` a cell-type **string** (`"Unassigned"` if nothing
+matched):
+
+```python
+import cosg
+cosg.cosg(adata, groupby="leiden", key_added="cosg", n_genes_user=25, layer="infog")
+names = pd.DataFrame(adata.uns["cosg"]["names"])
+results, top_hits = piaso.tl.analyzeMarkers({c: list(names[c]) for c in names.columns},
+                                            n_top_genes=25, species="Mouse")
+adata.obs["celltype_db"] = adata.obs["leiden"].map(top_hits)      # e.g. '0' -> '038 DG-PIR Ex IMN', '2' -> 'UL CPN'
+results["0"].head()                                                # the ranked candidates behind each call
+```
+This is the fastest sanity check on an unnamed cluster. It **names** clusters; to label
+**cells** by score (and smooth over the embedding) use `predictCellTypeByMarker` with the study's
+`marker_sets` (`marker_based_annotation.md`). The two compose: predict cells from a study's sets,
+then confirm cluster identities with `analyzeMarkers` on your own COSG markers.
+
+## Offline alternative
+
+`piaso.data.load_dataset("piaso_markerdb_allen_immune")` returns a 115 KB static slice
+(Allen Human Immune Health Atlas L2) as a DataFrame — for tests and air-gapped work; it is a
+published export, not the API.

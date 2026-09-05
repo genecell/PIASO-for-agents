@@ -27,3 +27,15 @@ RESULT: ALL PASS
 Notes: one router individually routed 'score a gene set' to Emergene rather than PIASO
 (both expose a gene-set scoring function); majority was PIASO. All 3 routers unanimously
 declined the 3 negative controls (nf-core, plain QC, scVI batch correction).
+
+
+## 2026-09-04 — prompt set extended, judging pending
+
+`activation_prompts.yaml` gained 8 positive prompts (regulons/GRN, stream from disk, Xenium
+overlay, compare LR across conditions, cytome in R, COSG p-values, doublets, Seurat -> AnnData)
+and 2 negatives (SCENIC+, Seurat FindAllMarkers), and `neg_qc` was flipped to a positive
+(`qc_h5ad`) because PIASO 1.2 ships QC and doublet detection. The generated trigger description
+is 1018/1024 chars. **The blind-router judge run has not been repeated**: it requires three
+independent LLM judges fed only the description, and none were available in the headless
+session that made this change. Run `score_activation.py` with fresh judge files before relying
+on the routing numbers above for the 0.2.0 description.

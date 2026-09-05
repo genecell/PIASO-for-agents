@@ -1,9 +1,11 @@
-piaso-tools
-cosg
-laris
-emergene
-matplotlib<3.9
-igraph
-leidenalg
+# Pinned to meta.yaml version_last_tested (2026-09-04). CI installs exactly these.
+piaso-tools==1.2.3
+cosg==1.2.0
+cytome==0.3.1
+laris==0.13.0
+emergene==1.0.2
+cytorete==0.1.1
+harmonypy
+py2bit
 pytest
 pyyaml
