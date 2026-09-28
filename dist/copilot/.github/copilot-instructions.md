@@ -112,8 +112,8 @@ Key off **size, sample count and what has to persist**.
 
 ### 5. Annotation: which route
 
-- Marker lists in hand (COSG output, or `piaso.tl.getMarkers(study=..., as_dict=True)` → **unpack
-  the tuple**) → `piaso.tl.predictCellTypeByMarker(adata, marker_gene_set=..., score_layer="infog",
+- Marker lists in hand (COSG output, or `piaso.tl.getMarkers(study=..., as_dict=True)` → **the
+  dict**) → `piaso.tl.predictCellTypeByMarker(adata, marker_gene_set=..., score_layer="infog",
   use_rep=<your embedding>)`.
 - A labelled reference and you want the query in the reference's coordinates →
   `runGDR(ref, save_reference=True)` + `piaso.tl.projectGDR(query, reference=ref)`, then
@@ -198,8 +198,8 @@ machines, https://plandrop.ai). Neither is an analysis package or a dependency.
 All Python packages are BSD-3-Clause; cytome (R) is MIT. PIASO-data tutorial datasets are
 redistributed under CC BY 4.0 with attribution to original sources (see `data.md`).
 
-Tested against: piaso-tools 1.2.3 · cosg 1.2.0 · cytome 0.3.1 · laris 0.13.0 · emergene 1.0.2 ·
-cytorete 0.1.1 · COSGR 1.0.0 · cytome (R) 0.1.0 (2026-09-04).
+Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · cytome 0.3.6 · laris 0.14.0 · emergene 1.0.2 ·
+cytorete 0.1.1 · COSGR 1.0.0 · cytome (R) 0.1.0 (2026-09-29).
 
 
 ## Workflows (see the hub for full code)
@@ -211,4 +211,4 @@ cytorete 0.1.1 · COSGR 1.0.0 · cytome (R) 0.1.0 (2026-09-04).
 - **Workflow — spatial transcriptomics (Xenium / Visium HD / MERFISH / Stereo-seq / Slide-tags)** (`workflows/spatial_transcriptomics.md`)
 - **Workflow — streaming / out-of-core analysis on a `.cytome`** (`workflows/streaming_large_data.md`)
 
-Tutorial index: https://piaso.org/tutorials/ · Tested against: piaso-tools 1.2.3 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.1 · cytome (R) 0.1.0 · laris 0.13.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-04).
+Tutorial index: https://piaso.org/tutorials/ · Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.6 · cytome (R) 0.1.0 · laris 0.14.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-29).

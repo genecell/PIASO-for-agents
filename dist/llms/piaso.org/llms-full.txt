@@ -1,6 +1,6 @@
 # PIASO-for-agents — full
 
-Tested against: piaso-tools 1.2.3 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.1 · cytome (R) 0.1.0 · laris 0.13.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-04).
+Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.6 · cytome (R) 0.1.0 · laris 0.14.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-29).
 
 
 <!-- ===== overview.md ===== -->
@@ -117,8 +117,8 @@ Key off **size, sample count and what has to persist**.
 
 ### 5. Annotation: which route
 
-- Marker lists in hand (COSG output, or `piaso.tl.getMarkers(study=..., as_dict=True)` → **unpack
-  the tuple**) → `piaso.tl.predictCellTypeByMarker(adata, marker_gene_set=..., score_layer="infog",
+- Marker lists in hand (COSG output, or `piaso.tl.getMarkers(study=..., as_dict=True)` → **the
+  dict**) → `piaso.tl.predictCellTypeByMarker(adata, marker_gene_set=..., score_layer="infog",
   use_rep=<your embedding>)`.
 - A labelled reference and you want the query in the reference's coordinates →
   `runGDR(ref, save_reference=True)` + `piaso.tl.projectGDR(query, reference=ref)`, then
@@ -203,8 +203,8 @@ machines, https://plandrop.ai). Neither is an analysis package or a dependency.
 All Python packages are BSD-3-Clause; cytome (R) is MIT. PIASO-data tutorial datasets are
 redistributed under CC BY 4.0 with attribution to original sources (see `data.md`).
 
-Tested against: piaso-tools 1.2.3 · cosg 1.2.0 · cytome 0.3.1 · laris 0.13.0 · emergene 1.0.2 ·
-cytorete 0.1.1 · COSGR 1.0.0 · cytome (R) 0.1.0 (2026-09-04).
+Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · cytome 0.3.6 · laris 0.14.0 · emergene 1.0.2 ·
+cytorete 0.1.1 · COSGR 1.0.0 · cytome (R) 0.1.0 (2026-09-29).
 
 
 <!-- ===== components/cosg.md ===== -->
@@ -343,8 +343,8 @@ and exclusivity (112-fold spread of top scores on the cortex tutorial). Run COSG
 `n_genes_user=adata.n_vars`, reshape with `cosg.indexByGene(pd.DataFrame(adata.uns[...]["COSG"]))`
 (genes × groups), then `cosg.iqrLogNormalize(scores, q_upper=0.95, q_lower=0.75)` divides each
 column by its upper-tail IQR and applies `log1p`. Use it for any shared heatmap, dendrogram or
-cross-type threshold. (Whether SCALAR's input should be normalized this way is an open question
-on the maintainers' side; `piaso.tl.specificity_matrix` returns the raw matrix.)
+cross-type threshold. SCALAR takes the raw scores: dividing a column by a constant changes
+nothing in its test, and the `log1p` compresses the top of each column.
 
 ### Plots
 
@@ -429,7 +429,7 @@ pip install 'cytome[anndata]'      # + anndata for from_anndata / to_anndata
 install.packages("cytome", repos = "https://genecell.r-universe.dev")   # binaries (Windows/macOS); source build needs liblz4, libzstd, zlib
 ```
 
-Executed against **cytome 0.3.1** (Python) and documented from **cytome (R) 0.1.0**. The R
+Executed against **cytome 0.3.6** (Python) and documented from **cytome (R) 0.1.0**. The R
 package is MIT; the Python package BSD-3-Clause. No paper yet — cite the repositories.
 
 ## When to use a cytome (decision rule)
@@ -450,7 +450,7 @@ package is MIT; the Python package BSD-3-Clause. No paper yet — cite the repos
 | `obs` | `ds.cells` (SQL table; `.to_pandas()`, `.query("...")`, `.query_mask("...")`, `ds.cells["col"]`) | metrics, clusters, predictions land here |
 | `var` | `ds.genes` (or `ds.peaks`) | |
 | `obsm["X_umap"]`, `obsm["spatial"]`, `obsm["X_gdr"]` | embeddings **`RNA_umap`**, **`RNA_spatial`**, `RNA_gdr` | the `X_` / `obsm` tokens are dropped on conversion; `to_anndata` restores them; PIASO writes its own keys as given (`X_umap`, `X_gdr2`) and resolves either form |
-| `obsp` graphs | `ds.graphs` | shared `graph_edges` table with R |
+| `obsp` graphs | `ds.graphs` | compressed row chunks from Python 0.3.6, read by cytome (R) from 0.1.1; the older `graph_edges` table both ways (see below) |
 | `uns` | `ds.metadata` (JSON store) | e.g. cytorete's `regulon` entry |
 | `uns["spatial"]` images | `ds.spatial_images` | `add_spatial_image`, `crop`, `as_uns` |
 
@@ -555,6 +555,14 @@ What travels (measured on the reference file): counts and a second modality (`RN
 **not** travel. ATAC feature ids must look like `chr1:100-200`. Cross-language conformance is
 tested in CI in **both** directions on a Python-written reference file.
 
+**Graphs between Python and R.** Python cytome 0.3.6 stores graphs as compressed row chunks.
+**cytome (R) 0.1.1** reads them; **0.1.0** reads only the older per-edge `graph_edges` table, so
+on a store whose graphs were written by Python 0.3.6, `cytome_graphs(x)` is empty and
+`read_cytome()` returns no graphs, without an error. Upgrade the R package; graphs written from
+R, or by Python before 0.3.6, travel both ways with either version. On 0.1.0, rebuild the
+neighbour graph in R after conversion (`Seurat::FindNeighbors`, or `scran::buildSNNGraph` for
+SingleCellExperiment).
+
 ## The Seurat ↔ AnnData bridge (the conversion people actually want)
 
 ```r
@@ -608,7 +616,7 @@ pip install cytorete            # pulls piaso-tools>=1.2.2, cosg, cytome
 pip install 'cytorete[motif]'   # + py2bit — REQUIRED to read genome sequence from a .2bit, i.e. for inferRegulon
 ```
 
-Executed against **cytorete 0.1.1** with piaso-tools 1.2.3. Without `py2bit`, `inferRegulon` stops
+Executed against **cytorete 0.1.1** with piaso-tools 1.2.6. Without `py2bit`, `inferRegulon` stops
 with `ImportError: piaso.data needs the optional 'py2bit' package ...` after the COSG step —
 install the extra up front. BSD-3-Clause; no paper yet — cite the repository.
 
@@ -815,7 +823,7 @@ pairs, **sender → receiver cell-type scores** with **exact p-values** against 
 null, spatial-neighbourhood context, and (since 0.10) validated **cross-condition comparison**. It
 keys off a spatial kNN graph and is meaningless without coordinates. Standalone package (pulls
 `cosg` and scanpy; PIASO is not required, only its figure style is used if present). Executed
-against **laris 0.13.0** on the Slide-tags human tonsil (`adata_tonsil.h5ad`, 5,695 cells ×
+against **laris 0.14.0** on the Slide-tags human tonsil (`adata_tonsil.h5ad`, 5,695 cells ×
 25,583 genes, Zenodo 10.5281/zenodo.19981287). Eight executed tutorials live in the repo:
 https://github.com/genecell/LARIS/blob/master/tutorials/README.md.
 
@@ -973,7 +981,7 @@ pip install 'piaso-tools[harmony]'  # piaso.tl.runHarmony
 
 Wheels ship for Linux, macOS (Intel + Apple Silicon) and Windows, Python 3.9–3.12; nothing to
 build. **Do not pin matplotlib** — the `matplotlib<3.9` requirement applied to ≤ 1.1.0 only.
-Blocks in this file were executed against **piaso-tools 1.2.3**; `predictCellTypeByGDR` needs
+Blocks in this file were executed against **piaso-tools 1.2.6**; `predictCellTypeByGDR` needs
 ≥ 1.2.3 (earlier 1.2.x discarded its result on AnnData). Conda (`bioconda::piaso`) lags PyPI —
 prefer pip.
 
@@ -1079,7 +1087,8 @@ the old `runSVDLazy` is a deprecated alias of it.
 
 ## Embedding and clustering — `runSVD`, `neighbors`, `leiden`, `umap`
 
-Standard steps, PIASO-native (igraph Leiden; no scanpy, no leidenalg needed):
+Standard steps, PIASO-native (PIASO's own parallel Leiden since 1.2.6, the same labels at any
+number of threads; `backend="igraph"` gives the partitions of 1.2.5; no scanpy, no leidenalg needed):
 
 ```python
 piaso.tl.runSVD(adata, layer="infog", n_components=50, key_added="X_svd")   # ALWAYS pass layer= — default is .X (raw counts)
@@ -1246,26 +1255,35 @@ specificity[receptor, receiver]`, with a permutation null built from expression-
 genes (`n_nearest_neighbors=30` matched genes, `n_permutations=1000` by default) and BH FDR **per
 sender–receiver pair**. Two inputs, both now provided by the ecosystem:
 
-- **`specificity_matrix`** (genes × cell types): `piaso.tl.specificity_matrix(data, groupby=,
-  cosg_layer="counts")` runs COSG at full `n_genes_user` and pivots it into a dense frame (needs
-  the raw-counts layer named by `cosg_layer`; on a cytome it reuses the cached COSG run).
-  Equivalent by hand: `cosg.cosg(adata, groupby=, n_genes_user=adata.n_vars, mu=1,
-  remove_lowly_expressed=False)` then pivot `uns['cosg']`. Scores are comparable **within** a
-  sender–receiver pair, not across pairs; whether to rescale columns is an open question on the
-  maintainers' side — this hub documents the raw COSG matrix.
+- **`specificity_matrix`** (genes × cell types): COSG over **every** gene with its detection
+  filter off, `cosg.cosg(adata, groupby=, n_genes_user=adata.n_vars, mu=10,
+  remove_lowly_expressed=False)`, pivoted from `uns['cosg']` into a dense frame (code below; the
+  same recipe as the SCALAR tutorial). With the filter on, COSG marks the genes it drops with
+  **−1**, two of which multiply to +1, and `runSCALAR` refuses any negative entry (from
+  piaso-tools 1.2.4). `piaso.tl.specificity_matrix` keeps those sentinels, so it is **not** a
+  SCALAR input as it stands. SCALAR applies its own 10 % detection floor in the test. Scores are
+  comparable **within** a sender–receiver pair, not across pairs; they go in raw.
 - **`lr_pairs`**: `piaso.data.load_lr_database("mouse" | "human", annotation=None)` fetches
   **CellChatDB** (mouse 3105 / human 2951 pairs; columns include `ligand`, `receptor`,
   `pathway_name`, `annotation` ∈ {Secreted Signaling, ECM-Receptor, Cell-Cell Contact, Non-protein
   Signaling}) — the same tables LARIS bundles. Any DataFrame with ligand/receptor columns works.
 
-**Reads** `layers[layer]` for the background statistics. **Writes nothing to `adata`** — returns a
+**Reads** `layers[layer]` for the background statistics, and `obs[groupby]` (the column whose
+labels are the matrix's columns) for the 10 % detection floor; `groupby=` is required unless
+`expressed_pct=None`. **Writes nothing to `adata`** — returns a
 DataFrame: `ligand, receptor, sender, receiver, interaction_score, p_value, p_value_fdr,
 nlog10_p_value_fdr` (+ `annotation_col` if given).
 
 ```python
-spec = piaso.tl.specificity_matrix(adata, groupby="leiden", cosg_layer="counts")   # (n_genes, n_groups); needs layers['counts']
+import cosg, pandas as pd
+cosg.cosg(adata, key_added="cosg", groupby="leiden", layer="counts", n_genes_user=adata.n_vars,
+          mu=10, remove_lowly_expressed=False)                                    # every gene, no -1 sentinels
+names, scores = pd.DataFrame(adata.uns["cosg"]["names"]), pd.DataFrame(adata.uns["cosg"]["scores"])
+spec = pd.DataFrame(0.0, index=adata.var_names, columns=names.columns)             # (n_genes, n_groups)
+for c in names.columns:
+    spec.loc[names[c].values, c] = scores[c].values
 lr = piaso.data.load_lr_database("mouse")                                          # (3105, 28) CellChatDB
-res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, layer="infog",
+res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, layer="infog", groupby="leiden",
                          annotation_col="annotation", n_permutations=1000, random_seed=42)
 sig = res[res["p_value_fdr"] < 0.05]
 sig.groupby(["sender", "receiver"]).size().sort_values(ascending=False).head()
@@ -1473,7 +1491,7 @@ piaso.tl.infog(adata, n_top_genes=3000)                   # reads RAW counts fro
 ```python
 piaso.tl.runSVD(adata, layer="infog", n_components=50, key_added="X_svd")   # pass layer= — default is .X (raw counts)
 piaso.tl.neighbors(adata, use_rep="X_svd", n_neighbors=15)
-piaso.tl.leiden(adata, resolution=1.0, key_added="leiden")                  # igraph; obs['leiden'] lowercase
+piaso.tl.leiden(adata, resolution=1.0, key_added="leiden")                  # obs['leiden'] lowercase; n_threads=0 = all cores
 piaso.tl.umap(adata, use_rep="X_svd")
 piaso.pl.embedding(adata, basis="X_umap", color="leiden", legend_loc="both")
 ```
@@ -1524,8 +1542,8 @@ analyses clean cells in a space defined partly by the cells you removed.
 Two marker sources; compare them (they fail differently).
 
 ```python
-# Route A — PIASOmarkerDB (curated, live API). as_dict=True returns a TUPLE: unpack both.
-markers_df, marker_db = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)
+# Route A — PIASOmarkerDB (curated, live API). as_dict=True returns the {cell_type: [genes]} dict.
+marker_db = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)
 piaso.tl.predictCellTypeByMarker(adata, marker_gene_set=marker_db, score_layer="infog",
                                  use_rep="X_svd", key_added="CellTypes_db")       # use_rep defaults to X_gdr — pass the embedding you have
 adata.obs["CellTypes_db"].value_counts().head()
@@ -1725,8 +1743,9 @@ pip install piaso-tools laris      # SCALAR lives in piaso-tools; laris pulls co
 `piaso.tl.runSCALAR` scores `interaction = specificity[ligand, sender] × specificity[receptor,
 receiver]` with a permutation null from expression-matched control genes
 (`n_nearest_neighbors=30`, `n_permutations=1000`) and BH FDR **per sender–receiver pair**. Both
-inputs come from the ecosystem: the specificity matrix from COSG (all genes) via
-`piaso.tl.specificity_matrix`, the pair list from CellChatDB via `piaso.data`.
+inputs come from the ecosystem: the specificity matrix from COSG (all genes, detection filter
+off, so there are no −1 sentinels, which `runSCALAR` refuses), the pair list from CellChatDB via
+`piaso.data`.
 
 Prerequisites: an AnnData with a normalized layer (`layers["infog"]`), a raw-counts layer (here
 `layers["counts"]`; the fixture has counts in `.X`), and a cell-type / cluster column.
@@ -1735,10 +1754,15 @@ Prerequisites: an AnnData with a normalized layer (`layers["infog"]`), a raw-cou
 import numpy as np, pandas as pd
 import piaso, cosg
 # adata from end_to_end_scrnaseq.md: layers['infog'], obs['leiden']
-adata.layers["counts"] = adata.X.copy()                                   # specificity_matrix reads raw counts from cosg_layer
-spec = piaso.tl.specificity_matrix(adata, groupby="leiden", cosg_layer="counts")   # (n_genes, n_groups) COSG lambda, all genes
+adata.layers["counts"] = adata.X.copy()                                   # COSG reads raw counts
+cosg.cosg(adata, key_added="cosg", groupby="leiden", layer="counts", n_genes_user=adata.n_vars,
+          mu=10, remove_lowly_expressed=False)                            # every gene; no -1 sentinels
+names, scores = pd.DataFrame(adata.uns["cosg"]["names"]), pd.DataFrame(adata.uns["cosg"]["scores"])
+spec = pd.DataFrame(0.0, index=adata.var_names, columns=names.columns)   # (n_genes, n_groups)
+for c in names.columns:
+    spec.loc[names[c].values, c] = scores[c].values
 lr = piaso.data.load_lr_database("mouse")                                 # CellChatDB (3105, 28); "human" -> 2951; annotation= to slice a mechanism
-res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, layer="infog",
+res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, layer="infog", groupby="leiden",
                          annotation_col="annotation", n_permutations=1000, random_seed=42)
 # DataFrame (no adata mutation): ligand, receptor, sender, receiver, interaction_score, p_value, p_value_fdr, nlog10_p_value_fdr, annotation
 sig = res[res["p_value_fdr"] < 0.05]
@@ -1820,7 +1844,7 @@ and 0.13; `n_permutations` is legacy) and the cross-condition family: `component
 | Coordinates | none | required (`obsm['X_spatial']`) |
 | Unit of the answer | (pair, sender, receiver) | per cell **and** (pair, sender, receiver) |
 | What constrains a hit | specificity in both partners | specificity **and** physical proximity |
-| Inputs | `piaso.tl.specificity_matrix` + `piaso.data.load_lr_database` | `laris.datasets.lrDatabase` (same CellChatDB) |
+| Inputs | COSG over all genes (`remove_lowly_expressed=False`) + `piaso.data.load_lr_database` | `laris.datasets.lrDatabase` (same CellChatDB) |
 | Null | permutation over matched control genes (`n_permutations`) | exact enumeration over matched pseudo-pairs (`prepareLRBackground`) |
 | Function | `piaso.tl.runSCALAR` | `laris.tl.prepareLRInteraction` → `prepareLRBackground` → `runLARIS` |
 | Output can be | ranked, filtered, plotted | all of that, plus mapped onto the tissue (`plotCCCSpatial`) |
@@ -1979,10 +2003,11 @@ import pandas as pd
 import piaso
 studies = piaso.tl.getMarkers(list_studies=True)                  # list[str], 36 studies (getMarkers == queryPIASOmarkerDB)
 df = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex")  # (1300, 7): cell_type, condition, gene, species, specificity_score, study_publication, tissue
-markers_df, marker_sets = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)   # TUPLE: table + {cell_type: [genes]} (26 types)
+marker_sets = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)   # {cell_type: [genes]} (26 types)
 ```
 `specificity_score` is a COSG score (higher = more exclusive to that type). **`as_dict=True`
-returns both** — unpack two names; the dict is what `predictCellTypeByMarker` consumes.
+returns the dict alone** (piaso-tools >= 1.2.5; before, it returned a `(table, dict)` pair); call
+without it for the table. The dict is what `predictCellTypeByMarker` consumes.
 
 ## Step 2 — Ask the other way round
 
@@ -2365,13 +2390,14 @@ each `components/*.md`. Every item here either bit a published tutorial or a hub
 - **`pip install piaso-tools` is the whole install.** It pulls `cosg` and `cytome` as hard
   dependencies; scanpy is **not** installed and **not** needed (`piaso-tools[scanpy]` is an
   interop extra). `pip install scrublet` and `scanpy[leiden]` are unnecessary: `piaso.pp.scrublet`
-  and `piaso.tl.leiden` (igraph) are built in.
+  and `piaso.tl.leiden` (PIASO's own Leiden; igraph as `backend="igraph"`) are built in.
 - **Conda channels lag PyPI.** `bioconda::piaso` was 1.0.3 and `bioconda::cosg` 1.1.3 when
-  piaso-tools 1.2.3 / cosg 1.2.0 were on PyPI; laris, cytome, cytorete and emergene have no conda
+  piaso-tools 1.2.6 / cosg 1.2.0 were on PyPI; laris, cytome, cytorete and emergene have no conda
   package. Prefer `pip`. R packages come from `https://genecell.r-universe.dev` (binaries) or
   conda-forge `r-cosg`.
-- **Minimum versions the hub's blocks assume:** piaso-tools 1.2.3 (`predictCellTypeByGDR` silently
-  discarded its result on AnnData in 1.2.0–1.2.2), cosg 1.1.2 (matplotlib fix, plain AnnData no
+- **Minimum versions the hub's blocks assume:** piaso-tools 1.2.5 (`getMarkers(as_dict=True)`
+  returns the dict alone from 1.2.5; `predictCellTypeByGDR` silently discarded its result on
+  AnnData in 1.2.0–1.2.2), cosg 1.1.2 (matplotlib fix, plain AnnData no
   longer needs cytome), laris 0.13.0 (p-value model), cytome 0.3.0 (`counts` invariant).
 - **Emergene pins `annoy < 1.17.0`; PIASO `stitchSpace` (BBKNN) segfaults with newer annoy.**
   `pip install emergene` caps annoy for this reason; pin `annoy==1.16.3` when running

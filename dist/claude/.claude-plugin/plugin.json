@@ -1,6 +1,6 @@
 {
   "name": "piaso",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "PIASO single-cell omics ecosystem: marker genes (COSG/COSGR), gene-set scoring, cell-type annotation, ligand-receptor analysis (SCALAR/LARIS), regulons (cytorete), streaming .cytome analysis (Python + R), Emergene.",
   "author": {
     "name": "Min Dai",

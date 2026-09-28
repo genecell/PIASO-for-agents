@@ -1,8 +1,8 @@
-# Pinned to meta.yaml version_last_tested (2026-09-04). CI installs exactly these.
-piaso-tools==1.2.3
+# Pinned to meta.yaml version_last_tested (2026-09-29). CI installs exactly these.
+piaso-tools==1.2.6
 cosg==1.2.0
-cytome==0.3.1
-laris==0.13.0
+cytome==0.3.6
+laris==0.14.0
 emergene==1.0.2
 cytorete==0.1.1
 harmonypy

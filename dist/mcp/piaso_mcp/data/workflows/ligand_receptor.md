@@ -39,8 +39,9 @@ pip install piaso-tools laris      # SCALAR lives in piaso-tools; laris pulls co
 `piaso.tl.runSCALAR` scores `interaction = specificity[ligand, sender] × specificity[receptor,
 receiver]` with a permutation null from expression-matched control genes
 (`n_nearest_neighbors=30`, `n_permutations=1000`) and BH FDR **per sender–receiver pair**. Both
-inputs come from the ecosystem: the specificity matrix from COSG (all genes) via
-`piaso.tl.specificity_matrix`, the pair list from CellChatDB via `piaso.data`.
+inputs come from the ecosystem: the specificity matrix from COSG (all genes, detection filter
+off, so there are no −1 sentinels, which `runSCALAR` refuses), the pair list from CellChatDB via
+`piaso.data`.
 
 Prerequisites: an AnnData with a normalized layer (`layers["infog"]`), a raw-counts layer (here
 `layers["counts"]`; the fixture has counts in `.X`), and a cell-type / cluster column.
@@ -49,10 +50,15 @@ Prerequisites: an AnnData with a normalized layer (`layers["infog"]`), a raw-cou
 import numpy as np, pandas as pd
 import piaso, cosg
 # adata from end_to_end_scrnaseq.md: layers['infog'], obs['leiden']
-adata.layers["counts"] = adata.X.copy()                                   # specificity_matrix reads raw counts from cosg_layer
-spec = piaso.tl.specificity_matrix(adata, groupby="leiden", cosg_layer="counts")   # (n_genes, n_groups) COSG lambda, all genes
+adata.layers["counts"] = adata.X.copy()                                   # COSG reads raw counts
+cosg.cosg(adata, key_added="cosg", groupby="leiden", layer="counts", n_genes_user=adata.n_vars,
+          mu=10, remove_lowly_expressed=False)                            # every gene; no -1 sentinels
+names, scores = pd.DataFrame(adata.uns["cosg"]["names"]), pd.DataFrame(adata.uns["cosg"]["scores"])
+spec = pd.DataFrame(0.0, index=adata.var_names, columns=names.columns)   # (n_genes, n_groups)
+for c in names.columns:
+    spec.loc[names[c].values, c] = scores[c].values
 lr = piaso.data.load_lr_database("mouse")                                 # CellChatDB (3105, 28); "human" -> 2951; annotation= to slice a mechanism
-res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, layer="infog",
+res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, layer="infog", groupby="leiden",
                          annotation_col="annotation", n_permutations=1000, random_seed=42)
 # DataFrame (no adata mutation): ligand, receptor, sender, receiver, interaction_score, p_value, p_value_fdr, nlog10_p_value_fdr, annotation
 sig = res[res["p_value_fdr"] < 0.05]
@@ -134,7 +140,7 @@ and 0.13; `n_permutations` is legacy) and the cross-condition family: `component
 | Coordinates | none | required (`obsm['X_spatial']`) |
 | Unit of the answer | (pair, sender, receiver) | per cell **and** (pair, sender, receiver) |
 | What constrains a hit | specificity in both partners | specificity **and** physical proximity |
-| Inputs | `piaso.tl.specificity_matrix` + `piaso.data.load_lr_database` | `laris.datasets.lrDatabase` (same CellChatDB) |
+| Inputs | COSG over all genes (`remove_lowly_expressed=False`) + `piaso.data.load_lr_database` | `laris.datasets.lrDatabase` (same CellChatDB) |
 | Null | permutation over matched control genes (`n_permutations`) | exact enumeration over matched pseudo-pairs (`prepareLRBackground`) |
 | Function | `piaso.tl.runSCALAR` | `laris.tl.prepareLRInteraction` → `prepareLRBackground` → `runLARIS` |
 | Output can be | ranked, filtered, plotted | all of that, plus mapped onto the tissue (`plotCCCSpatial`) |

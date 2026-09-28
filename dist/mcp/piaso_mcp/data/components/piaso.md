@@ -22,7 +22,7 @@ pip install 'piaso-tools[harmony]'  # piaso.tl.runHarmony
 
 Wheels ship for Linux, macOS (Intel + Apple Silicon) and Windows, Python 3.9–3.12; nothing to
 build. **Do not pin matplotlib** — the `matplotlib<3.9` requirement applied to ≤ 1.1.0 only.
-Blocks in this file were executed against **piaso-tools 1.2.3**; `predictCellTypeByGDR` needs
+Blocks in this file were executed against **piaso-tools 1.2.6**; `predictCellTypeByGDR` needs
 ≥ 1.2.3 (earlier 1.2.x discarded its result on AnnData). Conda (`bioconda::piaso`) lags PyPI —
 prefer pip.
 
@@ -128,7 +128,8 @@ the old `runSVDLazy` is a deprecated alias of it.
 
 ## Embedding and clustering — `runSVD`, `neighbors`, `leiden`, `umap`
 
-Standard steps, PIASO-native (igraph Leiden; no scanpy, no leidenalg needed):
+Standard steps, PIASO-native (PIASO's own parallel Leiden since 1.2.6, the same labels at any
+number of threads; `backend="igraph"` gives the partitions of 1.2.5; no scanpy, no leidenalg needed):
 
 ```python
 piaso.tl.runSVD(adata, layer="infog", n_components=50, key_added="X_svd")   # ALWAYS pass layer= — default is .X (raw counts)
@@ -295,26 +296,35 @@ specificity[receptor, receiver]`, with a permutation null built from expression-
 genes (`n_nearest_neighbors=30` matched genes, `n_permutations=1000` by default) and BH FDR **per
 sender–receiver pair**. Two inputs, both now provided by the ecosystem:
 
-- **`specificity_matrix`** (genes × cell types): `piaso.tl.specificity_matrix(data, groupby=,
-  cosg_layer="counts")` runs COSG at full `n_genes_user` and pivots it into a dense frame (needs
-  the raw-counts layer named by `cosg_layer`; on a cytome it reuses the cached COSG run).
-  Equivalent by hand: `cosg.cosg(adata, groupby=, n_genes_user=adata.n_vars, mu=1,
-  remove_lowly_expressed=False)` then pivot `uns['cosg']`. Scores are comparable **within** a
-  sender–receiver pair, not across pairs; whether to rescale columns is an open question on the
-  maintainers' side — this hub documents the raw COSG matrix.
+- **`specificity_matrix`** (genes × cell types): COSG over **every** gene with its detection
+  filter off, `cosg.cosg(adata, groupby=, n_genes_user=adata.n_vars, mu=10,
+  remove_lowly_expressed=False)`, pivoted from `uns['cosg']` into a dense frame (code below; the
+  same recipe as the SCALAR tutorial). With the filter on, COSG marks the genes it drops with
+  **−1**, two of which multiply to +1, and `runSCALAR` refuses any negative entry (from
+  piaso-tools 1.2.4). `piaso.tl.specificity_matrix` keeps those sentinels, so it is **not** a
+  SCALAR input as it stands. SCALAR applies its own 10 % detection floor in the test. Scores are
+  comparable **within** a sender–receiver pair, not across pairs; they go in raw.
 - **`lr_pairs`**: `piaso.data.load_lr_database("mouse" | "human", annotation=None)` fetches
   **CellChatDB** (mouse 3105 / human 2951 pairs; columns include `ligand`, `receptor`,
   `pathway_name`, `annotation` ∈ {Secreted Signaling, ECM-Receptor, Cell-Cell Contact, Non-protein
   Signaling}) — the same tables LARIS bundles. Any DataFrame with ligand/receptor columns works.
 
-**Reads** `layers[layer]` for the background statistics. **Writes nothing to `adata`** — returns a
+**Reads** `layers[layer]` for the background statistics, and `obs[groupby]` (the column whose
+labels are the matrix's columns) for the 10 % detection floor; `groupby=` is required unless
+`expressed_pct=None`. **Writes nothing to `adata`** — returns a
 DataFrame: `ligand, receptor, sender, receiver, interaction_score, p_value, p_value_fdr,
 nlog10_p_value_fdr` (+ `annotation_col` if given).
 
 ```python
-spec = piaso.tl.specificity_matrix(adata, groupby="leiden", cosg_layer="counts")   # (n_genes, n_groups); needs layers['counts']
+import cosg, pandas as pd
+cosg.cosg(adata, key_added="cosg", groupby="leiden", layer="counts", n_genes_user=adata.n_vars,
+          mu=10, remove_lowly_expressed=False)                                    # every gene, no -1 sentinels
+names, scores = pd.DataFrame(adata.uns["cosg"]["names"]), pd.DataFrame(adata.uns["cosg"]["scores"])
+spec = pd.DataFrame(0.0, index=adata.var_names, columns=names.columns)             # (n_genes, n_groups)
+for c in names.columns:
+    spec.loc[names[c].values, c] = scores[c].values
 lr = piaso.data.load_lr_database("mouse")                                          # (3105, 28) CellChatDB
-res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, layer="infog",
+res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, layer="infog", groupby="leiden",
                          annotation_col="annotation", n_permutations=1000, random_seed=42)
 sig = res[res["p_value_fdr"] < 0.05]
 sig.groupby(["sender", "receiver"]).size().sort_values(ascending=False).head()

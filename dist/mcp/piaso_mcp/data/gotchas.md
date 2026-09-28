@@ -12,13 +12,14 @@ each `components/*.md`. Every item here either bit a published tutorial or a hub
 - **`pip install piaso-tools` is the whole install.** It pulls `cosg` and `cytome` as hard
   dependencies; scanpy is **not** installed and **not** needed (`piaso-tools[scanpy]` is an
   interop extra). `pip install scrublet` and `scanpy[leiden]` are unnecessary: `piaso.pp.scrublet`
-  and `piaso.tl.leiden` (igraph) are built in.
+  and `piaso.tl.leiden` (PIASO's own Leiden; igraph as `backend="igraph"`) are built in.
 - **Conda channels lag PyPI.** `bioconda::piaso` was 1.0.3 and `bioconda::cosg` 1.1.3 when
-  piaso-tools 1.2.3 / cosg 1.2.0 were on PyPI; laris, cytome, cytorete and emergene have no conda
+  piaso-tools 1.2.6 / cosg 1.2.0 were on PyPI; laris, cytome, cytorete and emergene have no conda
   package. Prefer `pip`. R packages come from `https://genecell.r-universe.dev` (binaries) or
   conda-forge `r-cosg`.
-- **Minimum versions the hub's blocks assume:** piaso-tools 1.2.3 (`predictCellTypeByGDR` silently
-  discarded its result on AnnData in 1.2.0–1.2.2), cosg 1.1.2 (matplotlib fix, plain AnnData no
+- **Minimum versions the hub's blocks assume:** piaso-tools 1.2.5 (`getMarkers(as_dict=True)`
+  returns the dict alone from 1.2.5; `predictCellTypeByGDR` silently discarded its result on
+  AnnData in 1.2.0–1.2.2), cosg 1.1.2 (matplotlib fix, plain AnnData no
   longer needs cytome), laris 0.13.0 (p-value model), cytome 0.3.0 (`counts` invariant).
 - **Emergene pins `annoy < 1.17.0`; PIASO `stitchSpace` (BBKNN) segfaults with newer annoy.**
   `pip install emergene` caps annoy for this reason; pin `annoy==1.16.3` when running

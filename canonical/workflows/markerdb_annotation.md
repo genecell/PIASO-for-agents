@@ -24,10 +24,11 @@ import pandas as pd
 import piaso
 studies = piaso.tl.getMarkers(list_studies=True)                  # list[str], 36 studies (getMarkers == queryPIASOmarkerDB)
 df = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex")  # (1300, 7): cell_type, condition, gene, species, specificity_score, study_publication, tissue
-markers_df, marker_sets = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)   # TUPLE: table + {cell_type: [genes]} (26 types)
+marker_sets = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)   # {cell_type: [genes]} (26 types)
 ```
 `specificity_score` is a COSG score (higher = more exclusive to that type). **`as_dict=True`
-returns both** — unpack two names; the dict is what `predictCellTypeByMarker` consumes.
+returns the dict alone** (piaso-tools >= 1.2.5; before, it returned a `(table, dict)` pair); call
+without it for the table. The dict is what `predictCellTypeByMarker` consumes.
 
 ## Step 2 — Ask the other way round
 

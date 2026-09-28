@@ -22,7 +22,7 @@ pip install 'cytome[anndata]'      # + anndata for from_anndata / to_anndata
 install.packages("cytome", repos = "https://genecell.r-universe.dev")   # binaries (Windows/macOS); source build needs liblz4, libzstd, zlib
 ```
 
-Executed against **cytome 0.3.1** (Python) and documented from **cytome (R) 0.1.0**. The R
+Executed against **cytome 0.3.6** (Python) and documented from **cytome (R) 0.1.0**. The R
 package is MIT; the Python package BSD-3-Clause. No paper yet — cite the repositories.
 
 ## When to use a cytome (decision rule)
@@ -43,7 +43,7 @@ package is MIT; the Python package BSD-3-Clause. No paper yet — cite the repos
 | `obs` | `ds.cells` (SQL table; `.to_pandas()`, `.query("...")`, `.query_mask("...")`, `ds.cells["col"]`) | metrics, clusters, predictions land here |
 | `var` | `ds.genes` (or `ds.peaks`) | |
 | `obsm["X_umap"]`, `obsm["spatial"]`, `obsm["X_gdr"]` | embeddings **`RNA_umap`**, **`RNA_spatial`**, `RNA_gdr` | the `X_` / `obsm` tokens are dropped on conversion; `to_anndata` restores them; PIASO writes its own keys as given (`X_umap`, `X_gdr2`) and resolves either form |
-| `obsp` graphs | `ds.graphs` | shared `graph_edges` table with R |
+| `obsp` graphs | `ds.graphs` | compressed row chunks from Python 0.3.6, read by cytome (R) from 0.1.1; the older `graph_edges` table both ways (see below) |
 | `uns` | `ds.metadata` (JSON store) | e.g. cytorete's `regulon` entry |
 | `uns["spatial"]` images | `ds.spatial_images` | `add_spatial_image`, `crop`, `as_uns` |
 
@@ -147,6 +147,14 @@ What travels (measured on the reference file): counts and a second modality (`RN
 **normalized layers opt-in**, all cell annotations; feature annotations beyond id + symbol do
 **not** travel. ATAC feature ids must look like `chr1:100-200`. Cross-language conformance is
 tested in CI in **both** directions on a Python-written reference file.
+
+**Graphs between Python and R.** Python cytome 0.3.6 stores graphs as compressed row chunks.
+**cytome (R) 0.1.1** reads them; **0.1.0** reads only the older per-edge `graph_edges` table, so
+on a store whose graphs were written by Python 0.3.6, `cytome_graphs(x)` is empty and
+`read_cytome()` returns no graphs, without an error. Upgrade the R package; graphs written from
+R, or by Python before 0.3.6, travel both ways with either version. On 0.1.0, rebuild the
+neighbour graph in R after conversion (`Seurat::FindNeighbors`, or `scran::buildSNNGraph` for
+SingleCellExperiment).
 
 ## The Seurat ↔ AnnData bridge (the conversion people actually want)
 

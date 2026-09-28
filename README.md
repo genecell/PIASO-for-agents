@@ -12,8 +12,8 @@ hand-maintained copy. A CI drift check (`python build.py --check`) fails the bui
 canonical block against the **pinned component versions** on every push, nightly, and on
 component releases, so the guidance cannot silently rot.
 
-**Hub v0.2.0 · piaso-mcp 0.1.0 — tested against piaso-tools 1.2.3 · cosg 1.2.0 · cytome 0.3.1 ·
-laris 0.13.0 · emergene 1.0.2 · cytorete 0.1.1 · COSGR 1.0.0 · cytome (R) 0.1.0 (2026-09-04).**
+**Hub v0.2.1 · piaso-mcp 0.1.1 — tested against piaso-tools 1.2.6 · cosg 1.2.0 ·
+cytome 0.3.6 · laris 0.14.0 · emergene 1.0.2 · cytorete 0.1.1 · COSGR 1.0.0 · cytome (R) 0.1.0 (2026-09-29).**
 
 ## The ecosystem
 

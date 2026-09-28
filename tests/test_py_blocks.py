@@ -148,9 +148,9 @@ def test_predict_marker_own_and_markerdb(adata):
     for c in ["pred", "pred_raw", "pred_smoothed", "pred_score"]:
         assert c in adata.obs, c
     assert "pred_score" in adata.obsm
-    out = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)   # live API
-    assert isinstance(out, tuple) and len(out) == 2 and isinstance(out[1], dict) and len(out[1]) > 10
-    markers_df, marker_sets = out
+    marker_sets = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)   # live API
+    assert isinstance(marker_sets, dict) and len(marker_sets) > 10     # the dict alone from 1.2.5
+    markers_df = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex")
     assert set(markers_df.columns) >= {"cell_type", "gene", "specificity_score", "study_publication"}
     piaso.tl.predictCellTypeByMarker(adata, marker_gene_set=marker_sets, score_layer="infog",
                                      use_rep="X_gdr", key_added="CellTypes")
@@ -179,12 +179,18 @@ def test_markerdb_live_api():
 
 @skip_func
 def test_scalar_with_ecosystem_inputs(adata):
-    import piaso
-    spec = piaso.tl.specificity_matrix(adata, groupby="leiden", cosg_layer="counts")
+    import cosg, pandas as pd, piaso
+    cosg.cosg(adata, key_added="cosg", groupby="leiden", layer="counts", n_genes_user=adata.n_vars,
+              mu=10, remove_lowly_expressed=False)                        # the canonical recipe
+    names, scores = pd.DataFrame(adata.uns["cosg"]["names"]), pd.DataFrame(adata.uns["cosg"]["scores"])
+    spec = pd.DataFrame(0.0, index=adata.var_names, columns=names.columns)
+    for c in names.columns:
+        spec.loc[names[c].values, c] = scores[c].values
+    assert (spec.values >= 0).all(), "runSCALAR refuses COSG's -1 sentinels"
     assert spec.shape == (adata.n_vars, adata.obs["leiden"].nunique())
     lr = piaso.data.load_lr_database("mouse")
     assert {"ligand", "receptor", "annotation", "pathway_name"} <= set(lr.columns) and len(lr) > 3000
-    res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, layer="infog",
+    res = piaso.tl.runSCALAR(adata, specificity_matrix=spec, lr_pairs=lr, layer="infog", groupby="leiden",
                              annotation_col="annotation", n_permutations=100, random_seed=42)
     assert {"ligand", "receptor", "sender", "receiver", "interaction_score", "p_value", "p_value_fdr",
             "nlog10_p_value_fdr", "annotation"} <= set(res.columns)

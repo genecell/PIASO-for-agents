@@ -19,7 +19,7 @@ pip install cytorete            # pulls piaso-tools>=1.2.2, cosg, cytome
 pip install 'cytorete[motif]'   # + py2bit — REQUIRED to read genome sequence from a .2bit, i.e. for inferRegulon
 ```
 
-Executed against **cytorete 0.1.1** with piaso-tools 1.2.3. Without `py2bit`, `inferRegulon` stops
+Executed against **cytorete 0.1.1** with piaso-tools 1.2.6. Without `py2bit`, `inferRegulon` stops
 with `ImportError: piaso.data needs the optional 'py2bit' package ...` after the COSG step —
 install the extra up front. BSD-3-Clause; no paper yet — cite the repository.
 

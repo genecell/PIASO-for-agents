@@ -2,7 +2,7 @@
 
 > Agent-neutral knowledge hub for the PIASO single-cell omics ecosystem (Gord Fishell Lab, HMS / Broad). One canonical source generates every agent format (Claude skill, Cursor rules, AGENTS.md, llms.txt, MCP).
 
-Tested against: piaso-tools 1.2.3 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.1 · cytome (R) 0.1.0 · laris 0.13.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-04). Tutorials: https://piaso.org/tutorials/ · API reference: https://piaso.org/api/
+Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.6 · cytome (R) 0.1.0 · laris 0.14.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-29). Tutorials: https://piaso.org/tutorials/ · API reference: https://piaso.org/api/
 
 ## Components
 - [PIASO](https://raw.githubusercontent.com/genecell/PIASO-for-agents/master/canonical/components/piaso.md): python, analysis layer: QC, doublets, INFOG normalization, SVD/GDR, clustering, annotation, gene-set scoring (PIASOscore), SCALAR, plotting, piaso.data; install `pip install piaso-tools`

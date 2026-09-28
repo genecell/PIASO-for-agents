@@ -132,8 +132,8 @@ and exclusivity (112-fold spread of top scores on the cortex tutorial). Run COSG
 `n_genes_user=adata.n_vars`, reshape with `cosg.indexByGene(pd.DataFrame(adata.uns[...]["COSG"]))`
 (genes × groups), then `cosg.iqrLogNormalize(scores, q_upper=0.95, q_lower=0.75)` divides each
 column by its upper-tail IQR and applies `log1p`. Use it for any shared heatmap, dendrogram or
-cross-type threshold. (Whether SCALAR's input should be normalized this way is an open question
-on the maintainers' side; `piaso.tl.specificity_matrix` returns the raw matrix.)
+cross-type threshold. SCALAR takes the raw scores: dividing a column by a constant changes
+nothing in its test, and the `log1p` compresses the top of each column.
 
 ### Plots
 

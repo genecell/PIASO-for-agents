@@ -73,7 +73,7 @@ piaso.tl.infog(adata, n_top_genes=3000)                   # reads RAW counts fro
 ```python
 piaso.tl.runSVD(adata, layer="infog", n_components=50, key_added="X_svd")   # pass layer= — default is .X (raw counts)
 piaso.tl.neighbors(adata, use_rep="X_svd", n_neighbors=15)
-piaso.tl.leiden(adata, resolution=1.0, key_added="leiden")                  # igraph; obs['leiden'] lowercase
+piaso.tl.leiden(adata, resolution=1.0, key_added="leiden")                  # obs['leiden'] lowercase; n_threads=0 = all cores
 piaso.tl.umap(adata, use_rep="X_svd")
 piaso.pl.embedding(adata, basis="X_umap", color="leiden", legend_loc="both")
 ```
@@ -124,8 +124,8 @@ analyses clean cells in a space defined partly by the cells you removed.
 Two marker sources; compare them (they fail differently).
 
 ```python
-# Route A — PIASOmarkerDB (curated, live API). as_dict=True returns a TUPLE: unpack both.
-markers_df, marker_db = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)
+# Route A — PIASOmarkerDB (curated, live API). as_dict=True returns the {cell_type: [genes]} dict.
+marker_db = piaso.tl.getMarkers(study="AllenWholeMouseBrain_isocortex", as_dict=True)
 piaso.tl.predictCellTypeByMarker(adata, marker_gene_set=marker_db, score_layer="infog",
                                  use_rep="X_svd", key_added="CellTypes_db")       # use_rep defaults to X_gdr — pass the embedding you have
 adata.obs["CellTypes_db"].value_counts().head()

@@ -8,7 +8,7 @@ pairs, **sender → receiver cell-type scores** with **exact p-values** against 
 null, spatial-neighbourhood context, and (since 0.10) validated **cross-condition comparison**. It
 keys off a spatial kNN graph and is meaningless without coordinates. Standalone package (pulls
 `cosg` and scanpy; PIASO is not required, only its figure style is used if present). Executed
-against **laris 0.13.0** on the Slide-tags human tonsil (`adata_tonsil.h5ad`, 5,695 cells ×
+against **laris 0.14.0** on the Slide-tags human tonsil (`adata_tonsil.h5ad`, 5,695 cells ×
 25,583 genes, Zenodo 10.5281/zenodo.19981287). Eight executed tutorials live in the repo:
 https://github.com/genecell/LARIS/blob/master/tutorials/README.md.
 

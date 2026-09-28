@@ -10,8 +10,8 @@
 
 hub:
   name: PIASO-for-agents
-  version: "0.2.0"
-  tested_on: "2026-09-04"
+  version: "0.2.1"
+  tested_on: "2026-09-29"
   description: >-
     Agent-neutral knowledge hub for the PIASO single-cell omics ecosystem
     (Gord Fishell Lab, HMS / Broad). One canonical source generates every
@@ -55,8 +55,8 @@ components:
     conda: "bioconda::piaso (lags PyPI — 1.0.3 at last check; prefer pip)"
     import: piaso                            # piaso.tl|tools, piaso.pp|preprocessing, piaso.pl|plotting, piaso.data, piaso.settings
     aliases: {tools: tl, preprocessing: pp, plotting: pl}   # runtime-identical objects
-    version_last_tested: "1.2.3"
-    min_version_for_docs: "1.2.3"            # predictCellTypeByGDR discarded its result on AnnData before 1.2.3
+    version_last_tested: "1.2.6"
+    min_version_for_docs: "1.2.5"            # getMarkers(as_dict=True) returns the dict alone from 1.2.5; predictCellTypeByGDR needs >= 1.2.3
     license: BSD-3-Clause
     install: "pip install piaso-tools"
     extras: {scanpy: "pip install 'piaso-tools[scanpy]'  # interop only; core needs no scanpy", leiden: "pip install 'piaso-tools[leiden]'", harmony: "pip install 'piaso-tools[harmony]'"}
@@ -110,7 +110,7 @@ components:
     language: [python]
     pypi: cytome
     import: cytome                           # cytome.open/create/from_anndata/from_h5ad/from_10x_h5/from_cellranger(_arc)/merge/to_anndata
-    version_last_tested: "0.3.1"
+    version_last_tested: "0.3.6"
     license: BSD-3-Clause
     install: "pip install cytome"            # already installed with piaso-tools
     extras: {anndata: "pip install 'cytome[anndata]'", full: "pip install 'cytome[full]'"}
@@ -144,7 +144,7 @@ components:
     language: [python]                       # + bundled Rust kernels since 0.12.0 (NumPy fallback)
     pypi: laris
     import: laris                            # laris.tl|la.tl, .pl, .datasets
-    version_last_tested: "0.13.0"
+    version_last_tested: "0.14.0"
     license: BSD-3-Clause
     install: "pip install laris"
     extras: {cytome: "pip install 'laris[cytome]'"}
@@ -240,7 +240,7 @@ decision_rules:
       Spatial coordinates present (.obsm['spatial'] / ['X_spatial']; Visium, Visium HD,
       Xenium, MERFISH, Stereo-seq, Slide-tags) -> LARIS (laris.tl.prepareLRInteraction ->
       prepareLRBackground -> runLARIS). Dissociated single-cell, no coordinates -> PIASO SCALAR
-      (piaso.tl.specificity_matrix -> piaso.tl.runSCALAR). Both take the SAME CellChatDB
+      (cosg.cosg over all genes, remove_lowly_expressed=False -> piaso.tl.runSCALAR). Both take the SAME CellChatDB
       (piaso.data.load_lr_database / laris.datasets.lrDatabase). Natural pairing: SCALAR on a
       dissociated reference to find which interactions exist, LARIS on the spatial section to
       ask where they happen. Before either on a targeted panel: count LR pairs with BOTH genes

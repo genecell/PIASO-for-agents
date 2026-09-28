@@ -4,6 +4,28 @@ All notable changes to the PIASO-for-agents hub and the `piaso-mcp` server. The 
 server are versioned separately: the hub tag is the content release, `piaso-mcp` is the PyPI
 package that bundles a snapshot of it.
 
+## Hub v0.2.1 · piaso-mcp 0.1.1 — 2026-09-29
+
+Content checked against the 28 September releases and **tested against** piaso-tools 1.2.6 ·
+cytome 0.3.6 · laris 0.14.0 (cosg 1.2.0, emergene 1.0.2, cytorete 0.1.1 unchanged).
+**piaso-mcp 0.1.1** bundles this content (0.1.0 bundled hub v0.2.0, with the three stale examples
+below).
+
+- **`getMarkers(as_dict=True)` returns the dictionary alone** (from piaso-tools 1.2.5). The
+  examples that unpacked a `(table, dict)` pair are corrected; call without `as_dict` for the
+  table.
+- **SCALAR's specificity matrix is built as in the SCALAR tutorial**: COSG over every gene with
+  `remove_lowly_expressed=False`. `piaso.tl.specificity_matrix` keeps COSG's −1 sentinels, which
+  `runSCALAR` refuses from piaso-tools 1.2.4, so the old recipe failed. `runSCALAR` also needs
+  `groupby=` for its detection floor; the examples pass it.
+- **Leiden** is PIASO's own parallel implementation from 1.2.6 (the same labels at any number of
+  threads); `backend="igraph"` gives the partitions of 1.2.5.
+- **Graphs between Python and R**: cytome (R) 0.1.0 does not read graphs written by Python
+  cytome 0.3.6; cytome (R) 0.1.1 does. Noted in the cytome component, with the workaround for
+  0.1.0.
+- The plugin in `dist/claude` is a plugin folder of its own (manifest, README, license), and the
+  marketplace has a description.
+
 ## Hub v0.2.0 · piaso-mcp 0.1.0 — 2026-09-05
 
 Content refreshed for the August–September 2026 ecosystem releases and **tested against**
