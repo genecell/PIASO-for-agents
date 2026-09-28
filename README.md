@@ -265,7 +265,7 @@ build.py         # canonical/ -> all targets (pure text transforms); --check is 
 dist/            # ALL GENERATED — never hand-edited (claude/ agents/ cursor/ copilot/ llms/ mcp/)
 mcp/             # piaso-mcp source (local stdio server; serves knowledge + public data only)
 tests/           # executes every canonical code block (Python + R) on the fixtures; heavy spatial/regulon runs nightly
-.claude-plugin/  # marketplace + plugin manifest (repo root, for `claude plugin marketplace add`)
+.claude-plugin/  # the marketplace (repo root, for `claude plugin marketplace add`); the plugin is dist/claude
 .github/         # sync-check + test CI (re-runs on component releases + nightly) + PyPI / MCP-registry publish
 ```
 

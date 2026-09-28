@@ -1,5 +1,6 @@
 {
   "name": "PIASO-for-agents",
+  "description": "The PIASO single-cell omics ecosystem for Claude: one skill covering PIASO, COSG/COSGR, LARIS, SCALAR, cytome, cytorete, Emergene and PIASOmarkerDB.",
   "owner": {
     "name": "Min Dai",
     "email": "dai@broadinstitute.org",

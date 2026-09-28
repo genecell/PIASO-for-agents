@@ -22,7 +22,7 @@ Run:  python build.py            # build all
       python build.py --check    # build to a temp dir and diff against dist/ (CI sync-check)
 """
 from __future__ import annotations
-import argparse, shutil, sys, tempfile, filecmp, re
+import argparse, json, shutil, sys, tempfile, filecmp, re
 from pathlib import Path
 import yaml
 
@@ -145,6 +145,48 @@ def build_claude(dist: Path) -> None:
             shutil.copy(CANON / extra, refs / extra)
     (refs / "tutorials.md").write_text(tutorials_md())
     shutil.copy(ROOT / "LICENSE", skill / "LICENSE.txt")
+    _claude_plugin_folder(dist / "claude")
+
+
+def _claude_plugin_folder(folder: Path) -> None:
+    """Make dist/claude a plugin folder of its own: manifest, README and
+    license beside skills/. The Claude plugin directory lists the folder that
+    holds .claude-plugin/plugin.json and needs both files in it."""
+    hub = META["hub"]
+    name, email = hub["maintainer"].rsplit(" <", 1)
+    manifest = {
+        "name": "piaso",
+        "version": hub["version"],
+        "description": ("PIASO single-cell omics ecosystem: marker genes (COSG/COSGR), gene-set "
+                        "scoring, cell-type annotation, ligand-receptor analysis (SCALAR/LARIS), "
+                        "regulons (cytorete), streaming .cytome analysis (Python + R), Emergene."),
+        "author": {"name": name, "email": email.rstrip(">"), "url": hub["lab_url"]},
+        "homepage": hub["homepage"],
+        "repository": hub["source"],
+        "license": hub["license"],
+        "keywords": ["single-cell", "scRNA-seq", "spatial-transcriptomics", "bioinformatics",
+                     "marker-genes", "cell-type-annotation", "ligand-receptor", "gene-regulatory-network"],
+    }
+    (folder / ".claude-plugin").mkdir(parents=True, exist_ok=True)
+    (folder / ".claude-plugin" / "plugin.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (folder / "README.md").write_text(
+        "# PIASO for Claude\n\n"
+        "A skill that teaches Claude the PIASO single-cell omics ecosystem, so it writes correct "
+        "analysis code for scRNA-seq and spatial data in Python and R: quality control, INFOG "
+        "normalization, clustering, marker genes with COSG and COSGR, gene-set scoring, cell-type "
+        "annotation with PIASOmarkerDB, single-cell (SCALAR) and spatial (LARIS) ligand-receptor "
+        "analysis, gene regulatory networks with cytorete, differential expression with Emergene, "
+        "and out-of-core analysis of large datasets stored as `.cytome` files.\n\n"
+        "## What it contains\n\n"
+        "Only text: `skills/piaso/SKILL.md`, which routes a request to the right component, and "
+        "reference pages under `skills/piaso/references/` for each component and cross-component "
+        "workflow. The plugin runs no code, starts no server, and sends nothing anywhere. The "
+        "analysis code Claude writes runs in your own environment, with the packages you "
+        "install (`pip install piaso-tools`).\n\n"
+        f"## Links\n\n- Documentation and executed tutorials: {hub['tutorials']}\n"
+        f"- API reference: {hub['api_reference']}\n- Source of this plugin: {hub['source']}\n\n"
+        f"Maintained by {hub['lab']} ({hub['affiliation']}). License: {hub['license']}.\n")
+    shutil.copy(ROOT / "LICENSE", folder / "LICENSE")
 
 
 def _agents_body(scope: str) -> str:
