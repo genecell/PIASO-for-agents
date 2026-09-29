@@ -211,4 +211,4 @@ cytorete 0.1.1 · COSGR 1.0.0 · cytome (R) 0.1.0 (2026-09-29).
 - **Workflow — spatial transcriptomics (Xenium / Visium HD / MERFISH / Stereo-seq / Slide-tags)** (`workflows/spatial_transcriptomics.md`)
 - **Workflow — streaming / out-of-core analysis on a `.cytome`** (`workflows/streaming_large_data.md`)
 
-Tutorial index: https://piaso.org/tutorials/ · Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.6 · cytome (R) 0.1.0 · laris 0.14.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-29).
+Tutorial index: https://piaso.org/tutorials/ · Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.6 · cytome (R) 0.1.3 · laris 0.14.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-29).

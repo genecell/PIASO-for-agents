@@ -22,7 +22,7 @@ pip install 'cytome[anndata]'      # + anndata for from_anndata / to_anndata
 install.packages("cytome", repos = "https://genecell.r-universe.dev")   # binaries (Windows/macOS); source build needs liblz4, libzstd, zlib
 ```
 
-Executed against **cytome 0.3.6** (Python) and documented from **cytome (R) 0.1.0**. The R
+Executed against **cytome 0.3.6** (Python) and **cytome (R) 0.1.3**. The R
 package is MIT; the Python package BSD-3-Clause. No paper yet — cite the repositories.
 
 ## When to use a cytome (decision rule)
@@ -155,6 +155,11 @@ on a store whose graphs were written by Python 0.3.6, `cytome_graphs(x)` is empt
 R, or by Python before 0.3.6, travel both ways with either version. On 0.1.0, rebuild the
 neighbour graph in R after conversion (`Seurat::FindNeighbors`, or `scran::buildSNNGraph` for
 SingleCellExperiment).
+
+**Stores written without `zstandard`.** A Python install without the optional `zstandard`
+package compresses with zlib but labels the blobs `zstd`. Python reads them; cytome (R) before
+0.1.2 fails with "zstd frame content size unknown". Upgrade the R package (0.1.2 decodes by the
+bytes), or install `zstandard` on the Python side before writing.
 
 ## The Seurat ↔ AnnData bridge (the conversion people actually want)
 

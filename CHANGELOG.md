@@ -4,6 +4,15 @@ All notable changes to the PIASO-for-agents hub and the `piaso-mcp` server. The 
 server are versioned separately: the hub tag is the content release, `piaso-mcp` is the PyPI
 package that bundles a snapshot of it.
 
+## Hub v0.2.2 — 2026-09-29
+
+Content and pins as v0.2.1; **piaso-mcp 0.1.1** is unchanged and bundles v0.2.1.
+
+- The plugin shows as **PIASO** (`displayName`) with the piaso.org icon (`.claude-plugin/icon.svg`).
+- The E18 fixture download in `data.md` is Python (`urllib.request.urlretrieve`) instead of `curl`.
+- **cytome (R) 0.1.3** is the tested R version. The cytome component notes that R versions before
+  0.1.2 fail on stores written by a Python install without `zstandard`.
+
 ## Hub v0.2.1 · piaso-mcp 0.1.1 — 2026-09-29
 
 Content checked against the 28 September releases and **tested against** piaso-tools 1.2.6 ·

@@ -226,4 +226,4 @@ Workflow references (cross-component tasks):
 
 Also: `references/gotchas.md` (layer contracts, deprecated names), `references/data.md` (fixtures, registry), `references/tutorials.md` (the piaso.org tutorial index — point the user at the executed tutorial for their platform).
 
-Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.6 · cytome (R) 0.1.0 · laris 0.14.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-29).
+Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.6 · cytome (R) 0.1.3 · laris 0.14.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-29).

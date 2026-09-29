@@ -22,7 +22,7 @@ This repository is part of the **PIASO single-cell omics ecosystem**. Full, cros
 - **markers_vs_regulons**: "Which genes define this type" -> COSG (cosg.cosg). "Which transcription factors drive it" -> cytorete (cytorete.inferRegulon; needs genome .2bit + TSS BED + motif DB via piaso.data; RNA-only chain today). The piaso.tl.inferRegulon / regulonActivity names are thin forwarders to cytorete — new code should `import cytorete`.
 - **r_user**: Markers -> COSGR (r-universe / conda-forge r-cosg). File IO and streaming -> cytome (R, r-universe): read_cytome(as='Seurat'|'SingleCellExperiment'), write_cytome(), delayed=TRUE. Everything else (INFOG, GDR, scoring, SCALAR, LARIS, cytorete) is Python — build the .cytome in R with write_cytome(), analyse in Python, read the results back with read_cytome(). PIASOmarkerDB from R: the piaso-mcp server (query_marker_db) or the REST API at https://piaso.org/piasomarkerdb/api/v1/.
 
-Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.6 · cytome (R) 0.1.0 · laris 0.14.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-29). For full API, workflows, and citations, read the hub.
+Tested against: piaso-tools 1.2.6 · cosg 1.2.0 · COSGR 1.0.0 · cytome 0.3.6 · cytome (R) 0.1.3 · laris 0.14.0 · emergene 1.0.2 · cytorete 0.1.1 · PIASO-data v0.9.0 (2026-09-29). For full API, workflows, and citations, read the hub.
 
 ---
 Maintained by **[The Fishell Laboratory](https://fishelllab.hms.harvard.edu)** (Harvard Medical School / Broad Institute).

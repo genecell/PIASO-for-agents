@@ -156,6 +156,7 @@ def _claude_plugin_folder(folder: Path) -> None:
     name, email = hub["maintainer"].rsplit(" <", 1)
     manifest = {
         "name": "piaso",
+        "displayName": "PIASO",
         "version": hub["version"],
         "description": ("PIASO single-cell omics ecosystem: marker genes (COSG/COSGR), gene-set "
                         "scoring, cell-type annotation, ligand-receptor analysis (SCALAR/LARIS), "
@@ -187,6 +188,7 @@ def _claude_plugin_folder(folder: Path) -> None:
         f"- API reference: {hub['api_reference']}\n- Source of this plugin: {hub['source']}\n\n"
         f"Maintained by {hub['lab']} ({hub['affiliation']}). License: {hub['license']}.\n")
     shutil.copy(ROOT / "LICENSE", folder / "LICENSE")
+    shutil.copy(ROOT / "canonical" / "icon.svg", folder / ".claude-plugin" / "icon.svg")
 
 
 def _agents_body(scope: str) -> str:

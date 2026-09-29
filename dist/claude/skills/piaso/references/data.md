@@ -63,11 +63,12 @@ atlas's cell annotations, ready to stream: `piaso.data.load_dataset(name, return
 
 Load the small fixture without `piaso.data` (e.g. in a cosg-only or cytome-only environment):
 
-```bash
-curl -L -o e18_v3_nuclei.h5 \
-  "https://zenodo.org/api/records/22012620/files/SC3_v3_NextGem_DI_Nuclei_5K_SC3_v3_NextGem_DI_Nuclei_5K_count_sample_feature_bc_matrix.h5/content"
-```
 ```python
+import urllib.request
+url = ("https://zenodo.org/api/records/22012620/files/"
+       "SC3_v3_NextGem_DI_Nuclei_5K_SC3_v3_NextGem_DI_Nuclei_5K_count_sample_feature_bc_matrix.h5/content")
+urllib.request.urlretrieve(url, "e18_v3_nuclei.h5")   # 19.3 MB, md5 81a6ceb41e2def93ac0d0f824a610849
+
 import piaso
 adata = piaso.pp.read_10x_h5("e18_v3_nuclei.h5")   # raw UMI counts in .X, ~5k nuclei
 ```
